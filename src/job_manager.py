@@ -2,7 +2,7 @@ import time
 import schedule
 
 
-class ScheduledJob:
+class JobManager:
 
     def __init__(self):
         self.schedule = schedule
@@ -21,20 +21,3 @@ class ScheduledJob:
         while True:
             self.schedule.run_pending()
             time.sleep(30)
-
-
-class JobManager(ScheduledJob):
-
-    def __init__(self, todoist_api):
-        super().__init__()
-
-        # Указывать время в том часовом поясе, в котором код будет работать!
-        self.set_daly_schedule([
-            {'time': "07:00",
-             'func': todoist_api.daily_report},
-            {'time': "05:00",
-             'func': todoist_api.planner.refresh_plans()},
-        ])
-
-        print(self.schedule.jobs)
-        self.process_schedule()

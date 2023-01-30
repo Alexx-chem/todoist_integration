@@ -59,16 +59,14 @@ class TodoistApi:
 
         tasks = self._sync_todo_tasks()
         projects = self._sync_projects()
-        labels = self._sync_labels()
         done_tasks = self._sync_done_tasks(projects)
-        task_activity = self._sync_activity()
 
         scope = {
             'tasks': tasks,
             'projects': projects,
-            'labels': labels,
+            'labels': self._sync_labels(),
             'done_tasks': done_tasks,
-            'task_activity': task_activity
+            'task_activity': self._sync_activity()
         }
 
         if feed_planner:

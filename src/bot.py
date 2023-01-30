@@ -13,7 +13,7 @@ class Bot:
     def __init__(self, config):
         self.config = config
 
-        self.bot = telebot.TeleBot(config.bot_token)
+        self.bot = telebot.TeleBot(config.BOT_TOKEN)
         self.alive = 1
 
         # Запускаем подпроцесс мониторинга задач

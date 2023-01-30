@@ -12,6 +12,8 @@ class ExtendedTask(Task):
         if isinstance(task, Task):
             self.__dict__ = deepcopy(task.__dict__)
 
+        self.is_deleted = False
+
         if isinstance(task, dict):
             super().__init__(*[None]*17)
             self.__dict__.update(task)

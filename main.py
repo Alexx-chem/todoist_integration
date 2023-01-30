@@ -13,7 +13,7 @@ def get_task_state(td_api):
 
 if __name__ == '__main__':
 
-    todoist_api = TodoistApi(config.todoist_token)
+    todoist_api = TodoistApi(config.TODOIST_TOKEN)
     todoist_api.run()
 
     task_manager = get_task_state(todoist_api)

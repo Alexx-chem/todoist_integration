@@ -15,6 +15,14 @@ from src.functions import set_db_timezone
 
 
 class TodoistApi:
+
+    OBJECTS_COLLECTION_NAMES = ['tasks',
+                                'projects',
+                                'labels',
+                                'done_tasks',
+                                'task_activity',
+                                'goals_with_subtasks']
+
     def __init__(self, todoist_api_token):
         self.rest_api = Rest_API(todoist_api_token)
         self.sync_api = Sync_API(todoist_api_token, api_version=config.TODOIST_API_VERSION)
@@ -34,28 +42,36 @@ class TodoistApi:
 
     def run(self):
         try:
-            self.load_all_objects()
-            process_diff = True
+            self._load_all_objects()
+            self.planner.run(self.tasks)
+
         except (FileNotFoundError, Exception) as e:
             print(e)
-            process_diff = False
+            self._fill_objects_from_api()
+            self.goals_with_subtasks = self._get_goals_with_subtasks()
+            self.planner.run(self.tasks)
 
-        self.sync_all_objects(process_diff, feed_planner=True)
-        self.save_all_objects()
+        else:
+            self.sync_all_objects()
 
-    def save_all_objects(self):
-        scope = {'tasks': self.tasks,
-                 'projects': self.projects,
-                 'labels': self.labels,
-                 'done_tasks': self.done_tasks,
-                 'task_activity': self.task_activity}
+        self._save_all_objects()
+
+    def _save_all_objects(self):
+        scope = {collection: self.__dict__[collection] for collection in self.OBJECTS_COLLECTION_NAMES}
         joblib.dump(scope, 'todoist_scope')
 
-    def load_all_objects(self):
+    def _load_all_objects(self):
         scope = joblib.load('todoist_scope')
         self.__dict__.update(scope)
 
-    def sync_all_objects(self, process_diff=True, feed_planner=False):
+    def _fill_objects_from_api(self):
+        self.tasks = self._sync_todo_tasks()
+        self.projects = self._sync_projects()
+        self.labels = self._sync_labels()
+        self.task_activity = self._sync_activity()
+        self.done_tasks = self._sync_done_tasks(self.projects)
+
+    def sync_all_objects(self):
 
         tasks = self._sync_todo_tasks()
         projects = self._sync_projects()
@@ -69,16 +85,10 @@ class TodoistApi:
             'task_activity': self._sync_activity()
         }
 
-        if feed_planner:
-            # TODO Dirty hack...
-            self.planner.run(tasks)
-
-        if process_diff:
-            self._process_scope_diff(scope)
-
+        self._process_scope_diff(scope)
         self.__dict__.update(scope)
-
         self.goals_with_subtasks = self._get_goals_with_subtasks()
+        self._save_all_objects()
 
     def _process_scope_diff(self, scope):
 
@@ -199,15 +209,15 @@ class TodoistApi:
 
     def _sync_activity(self):
         # This is dumb! requests.get does not work! But curl does.
-        res = os.popen(f'curl https://api.todoist.com/sync/{config.TODOIST_API_VERSION}/activity/get '
-                       f'-H "Authorization: Bearer {self.token}"').read()
-        all_events = json.loads(res)['events']
+        activity = os.popen(f'curl https://api.todoist.com/sync/{config.TODOIST_API_VERSION}/activity/get '
+                            f'-H "Authorization: Bearer {self.token}"').read()
+        all_events = json.loads(activity)['events']
 
         res = {}
         for event in all_events:
             event['is_completed'] = True if event['event_type'] == 'completed' else False
             event['is_deleted'] = True if event['event_type'] == 'deleted' else False
-            res[event.object_id] = event
+            res[event['object_id']] = event
 
         return res
 

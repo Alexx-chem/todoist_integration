@@ -4,6 +4,7 @@ from datetime import datetime, date
 from db_worker import DBWorker
 
 from src.functions import get_today, horizon_to_date
+from src.todoist import TodoistApi
 from .extended_task import ExtendedTask
 import config
 
@@ -12,13 +13,10 @@ DBWorker.set_config(config.db_config)
 
 class Planner:
 
-    def __init__(self):
+    def __init__(self, todoist_api: TodoistApi):
 
         self.plans = {}
-        self.tasks = None
-
-    def run(self, tasks):
-        self.tasks = tasks
+        self.api = todoist_api
         self.refresh_plans()
 
     def refresh_plans(self):
@@ -30,22 +28,19 @@ class Planner:
                 plan = Plan.get_active_by_horizon(horizon=horizon)
 
                 if plan.end < today:
-                    print(f'Plan for the {horizon} is outdated! Creating a new one')
-                    DBWorker.input(f"update todoist_plan set active = false where id = '{plan.id}'")
+                    print(f'Plan for the {horizon} is outdated! Creating a report and a new plan')
                     
                     plan.report()
+                    plan.set_inactive_by_id()
 
-                    plan = Plan.create(horizon=horizon, active=True, start=today)
-                    plan.fill_from_tasks(self.tasks)
+                    plan = self.create_plan_from_scratch(horizon, today)
 
             except ValueError as e:
                 print(f'A error occurred while loading a plan from the DB: "{e}"')
                 print('Creating a new one!')
 
-                DBWorker.input(f"update todoist_plan set active = false where horizon = '{horizon}'")
-
-                plan = Plan.create(horizon=horizon, active=True, start=today)
-                plan.fill_from_tasks(self.tasks)
+                Plan.set_inactive_by_horizon(horizon)
+                plan = self.create_plan_from_scratch(horizon, today)
 
             self.plans[horizon] = plan
 
@@ -68,6 +63,12 @@ class Planner:
             task_planned = self.plans[plan].process_task(task, action)
 
         return task_planned
+
+    def create_plan_from_scratch(self, horizon, start):
+        plan = Plan.create(horizon=horizon, active=True, start=start)
+        self.api.sync_all_objects()
+        plan.fill_from_tasks(self.api.tasks)
+        return plan
 
 
 class Plan:
@@ -277,3 +278,10 @@ class Plan:
     def report(self):
         # TODO сделать отчёт по плану!
         pass
+
+    def set_inactive_by_id(self):
+        DBWorker.input(f"update todoist_plan set active = false where id = '{self.id}")
+
+    @classmethod
+    def set_inactive_by_horizon(cls, horizon):
+        DBWorker.input(f"update todoist_plan set active = false where horizon = {horizon}")

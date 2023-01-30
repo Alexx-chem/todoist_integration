@@ -1,5 +1,9 @@
 import time
 import schedule
+from typing import Callable
+
+
+from src import threaded
 
 
 class JobManager:
@@ -13,7 +17,7 @@ class JobManager:
             job_period = job.get('period', 1)
             job_time = job.get('time')
             job_func = job.get('func')
-            assert job_func, "Job callable must be set!"
+            assert isinstance(job_func, Callable), "Job func must be callable!"
             assert job_time, "Job time must be set!"
             self.schedule.every(job_period).day.at(job_time).do(job_func)
 
@@ -21,3 +25,8 @@ class JobManager:
         while True:
             self.schedule.run_pending()
             time.sleep(30)
+
+    @threaded
+    def get_task_state(self):
+        print(self.schedule.jobs)
+        self.process_schedule()

@@ -2,7 +2,7 @@
 ALEXX_TODOIST_ID = '***REMOVED***'
 headers = {'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.141 Safari/537.36',
            'cookie': '***REMOVED***'}
-TODOIST_TOKEN = '0bb3211b3219a66ef40020857cbcc00f108cd8a7'
+TODOIST_TOKEN = ''***REMOVED***''
 TODOIST_API_VERSION = 'v9'
 
 # TG config

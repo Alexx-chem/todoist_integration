@@ -4,16 +4,19 @@ from datetime import datetime, date
 from db_worker import DBWorker
 
 from src.functions import get_today, horizon_to_date
-from src.todoist import TodoistApi
 from .extended_task import ExtendedTask
 import config
+from src.logger import get_logger
+
+
+logger = get_logger('PlannerLogger', 'console', 'INFO')
 
 DBWorker.set_config(config.db_config)
 
 
 class Planner:
 
-    def __init__(self, todoist_api: TodoistApi):
+    def __init__(self, todoist_api):
 
         self.plans = {}
         self.api = todoist_api
@@ -28,7 +31,7 @@ class Planner:
                 plan = Plan.get_active_by_horizon(horizon=horizon)
 
                 if plan.end < today:
-                    print(f'Plan for the {horizon} is outdated! Creating a report and a new plan')
+                    logger.info(f'Plan for the {horizon} is outdated! Creating a report and a new plan')
                     
                     plan.report()
                     plan.set_inactive_by_id()
@@ -36,8 +39,8 @@ class Planner:
                     plan = self.create_plan_from_scratch(horizon, today)
 
             except ValueError as e:
-                print(f'A error occurred while loading a plan from the DB: "{e}"')
-                print('Creating a new one!')
+                logger.warning(f'A error occurred while loading a plan from the DB: "{e}"')
+                logger.info('Creating a new plan')
 
                 Plan.set_inactive_by_horizon(horizon)
                 plan = self.create_plan_from_scratch(horizon, today)
@@ -121,17 +124,17 @@ class Plan:
                 f'{action.capitalize()} task {task.id} is already present in the plan {self.id}!'
 
             self.add_task_to_plan(task.id, 'planned')
-            print(f'{action.capitalize()} task "{task.content}" ({task.id}) is planned to the {self.horizon} plan')
+            logger.info(f'{action.capitalize()} task "{task.content}" ({task.id}) is planned to the {self.horizon} plan')
             return True
 
         if action == 'modified' and task_fits_the_plan and 'planned' in possible_new_statuses:
             self.add_task_to_plan(task.id, 'planned')
-            print(f'Task "{task.content}" ({task.id}) is planned to the {self.horizon} plan')
+            logger.info(f'Task "{task.content}" ({task.id}) is planned to the {self.horizon} plan')
             return True
 
         if action in ('deleted', 'completed') and action in possible_new_statuses:
             self.add_task_to_plan(task.id, action)
-            print(f'Task "{task.content}" ({task.id}) from the {self.horizon} plan is {action}')
+            logger.info(f'Task "{task.content}" ({task.id}) from the {self.horizon} plan is {action}')
             return True
 
         return False

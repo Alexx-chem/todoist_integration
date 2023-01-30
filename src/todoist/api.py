@@ -6,12 +6,17 @@ from todoist.api import TodoistAPI as Sync_API
 from collections import defaultdict
 from typing import Callable, Iterable, List
 import requests
+from time import sleep
 
 import config
 
 from src.todoist.extended_task import ExtendedTask
 from src.todoist.planner import Planner
 from src.functions import set_db_timezone
+from src.logger import get_logger
+
+
+logger = get_logger('ApiLogger', 'console', 'INFO')
 
 
 class TodoistApi:
@@ -24,6 +29,7 @@ class TodoistApi:
                                 'goals_with_subtasks']
 
     def __init__(self, todoist_api_token):
+        logger.debug("TodoistApi init")
         self.rest_api = Rest_API(todoist_api_token)
         self.sync_api = Sync_API(todoist_api_token, api_version=config.TODOIST_API_VERSION)
         self.token = todoist_api_token
@@ -36,20 +42,19 @@ class TodoistApi:
 
         self.goals_with_subtasks = None
 
-        self.planner = Planner()
+        self.planner = Planner(self)
 
         set_db_timezone()
 
     def run(self):
         try:
+            logger.debug("Loading objects")
             self._load_all_objects()
-            self.planner.run(self.tasks)
 
         except (FileNotFoundError, Exception) as e:
-            print(e)
+            logger.warning(e)
             self._fill_objects_from_api()
             self.goals_with_subtasks = self._get_goals_with_subtasks()
-            self.planner.run(self.tasks)
 
         else:
             self.sync_all_objects()
@@ -72,6 +77,7 @@ class TodoistApi:
         self.done_tasks = self._sync_done_tasks(self.projects)
 
     def sync_all_objects(self):
+        logger.debug("sync_all_objects")
 
         tasks = self._sync_todo_tasks()
         projects = self._sync_projects()
@@ -143,7 +149,7 @@ class TodoistApi:
         try:
             requests.post(request)
         except requests.exceptions.ConnectionError:
-            print('Не удалось соединиться с ядром бота')
+            logger.error('Connection to Telegram Bot Core is unsuccessful')
 
     @staticmethod
     def _to_dict_by_id(lst: list):
@@ -204,6 +210,7 @@ class TodoistApi:
         done_tasks = []
         for project_id in projects:
             done_tasks.extend([ExtendedTask(task.data) for task in self._sync_done_tasks_by_project(project_id)])
+            sleep(10)
 
         return self._to_dict_by_id(done_tasks)
 

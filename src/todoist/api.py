@@ -102,12 +102,12 @@ class TodoistApi:
 
         # Completed tasks
         completed_task_ids = stale_task_ids & scope['events']['completed'].keys()
-        logger.debug('completed_task_ids', completed_task_ids)
+        logger.debug(f'completed_task_ids {completed_task_ids}')
         task_to_action_map.extend([(task_id, 'completed') for task_id in completed_task_ids])
 
         # Deleted tasks
         deleted_task_ids = stale_task_ids & scope['events']['deleted'].keys()
-        logger.debug('deleted_task_ids', deleted_task_ids)
+        logger.debug(f'deleted_task_ids {deleted_task_ids}')
         task_to_action_map.extend([(task_id, 'deleted') for task_id in deleted_task_ids])
 
         # Tasks present only in synced scope, not in local
@@ -115,12 +115,12 @@ class TodoistApi:
 
         # Newly created tasks
         new_task_ids = new_and_uncompleted_task_ids & scope['events']['added'].keys()
-        logger.debug('new_task_ids', new_task_ids)
+        logger.debug(f'new_task_ids {new_task_ids}')
         task_to_action_map.extend([(task_id, 'created') for task_id in new_task_ids])
 
         # Uncompleted tasks
         uncompleted_task_ids = new_and_uncompleted_task_ids & scope['events']['updated'].keys()
-        logger.debug('uncompleted_task_ids', uncompleted_task_ids)
+        logger.debug(f'uncompleted_task_ids {uncompleted_task_ids}')
         task_to_action_map.extend([(task_id, 'undone') for task_id in uncompleted_task_ids])
 
         # Tasks, present in both synced and local scopes
@@ -128,7 +128,7 @@ class TodoistApi:
 
         # Tasks, modified in comparison
         modified_tasks = self._get_tasks_diff(scope, common_task_ids)
-        logger.debug('modified_tasks', modified_tasks)
+        logger.debug(f'modified_tasks: {modified_tasks}')
 
         task_to_action_map.extend([(task_id, 'modified') for task_id in modified_tasks])
 

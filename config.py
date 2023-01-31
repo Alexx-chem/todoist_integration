@@ -1,5 +1,5 @@
 # Common
-GLOBAL_LOG_LEVEL = 'DEBUG'
+GLOBAL_LOG_LEVEL = 'INFO'
 
 # Todoist connection
 ALEXX_TODOIST_ID = '***REMOVED***'
@@ -21,7 +21,7 @@ db_config = {'dbhost': 'localhost',
 
 # Todoist planner config
 
-TODOIST_SYNC_TIMEOUT_SECONDS = 90
+TODOIST_SYNC_TIMEOUT_SECONDS = 600
 
 TODOIST_DATE_FORMAT = '%Y-%m-%d'
 

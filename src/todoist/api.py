@@ -99,45 +99,36 @@ class TodoistApi:
 
         # Tasks present only in local scope, not in synced
         stale_task_ids = self.tasks.keys() - scope['tasks'].keys()
-        print('stale_task_ids', stale_task_ids)
 
         # Completed tasks
         completed_task_ids = stale_task_ids & scope['events']['completed'].keys()
-        print('completed_task_ids', completed_task_ids)
+        logger.debug('completed_task_ids', completed_task_ids)
         task_to_action_map.extend([(task_id, 'completed') for task_id in completed_task_ids])
 
         # Deleted tasks
         deleted_task_ids = stale_task_ids & scope['events']['deleted'].keys()
-        print('deleted_task_ids', deleted_task_ids)
+        logger.debug('deleted_task_ids', deleted_task_ids)
         task_to_action_map.extend([(task_id, 'deleted') for task_id in deleted_task_ids])
-
-        print('len stale', len(stale_task_ids))
-        print('len completed + deleted', len(completed_task_ids | deleted_task_ids))
 
         # Tasks present only in synced scope, not in local
         new_and_uncompleted_task_ids = scope['tasks'].keys() - self.tasks.keys()
-        print('new_and_uncompleted_task_ids', new_and_uncompleted_task_ids)
 
         # Newly created tasks
         new_task_ids = new_and_uncompleted_task_ids & scope['events']['added'].keys()
-        print('new_task_ids', new_task_ids)
+        logger.debug('new_task_ids', new_task_ids)
         task_to_action_map.extend([(task_id, 'created') for task_id in new_task_ids])
 
         # Uncompleted tasks
         uncompleted_task_ids = new_and_uncompleted_task_ids & scope['events']['updated'].keys()
-        print('uncompleted_task_ids', uncompleted_task_ids)
+        logger.debug('uncompleted_task_ids', uncompleted_task_ids)
         task_to_action_map.extend([(task_id, 'undone') for task_id in uncompleted_task_ids])
-
-        print('len new and uncompleted', len(new_and_uncompleted_task_ids))
-        print('len new + uncompleted', len(new_task_ids | uncompleted_task_ids))
 
         # Tasks, present in both synced and local scopes
         common_task_ids = scope['tasks'].keys() & self.tasks.keys()  # Tasks present both in local and synced scopes
-        # print('common_task_ids', common_task_ids)
 
         # Tasks, modified in comparison
         modified_tasks = self._get_tasks_diff(scope, common_task_ids)
-        print('modified_tasks', modified_tasks)
+        logger.debug('modified_tasks', modified_tasks)
 
         task_to_action_map.extend([(task_id, 'modified') for task_id in modified_tasks])
 

@@ -42,4 +42,4 @@ class ExtendedTask(Task):
             return True
 
         if self.is_active_with_due:
-            return datetime.strptime(self.due.date, config.todoist_date_format) <= datetime.now()
+            return datetime.strptime(self.due.date, config.todoist_date_format).date() <= datetime.now().date()

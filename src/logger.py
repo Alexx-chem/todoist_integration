@@ -1,16 +1,22 @@
 import logging
-import sys
 import os
 
 
-def get_logger(logger_name, logger_type, logging_level,  **kwargs):
-    # Create a custom logger
+log_levels = {'error': logging.ERROR,
+              'warning': logging.WARNING,
+              'info': logging.INFO,
+              'debug': logging.DEBUG}
+
+
+def get_logger(logger_name, logger_type, logging_level='info',  **kwargs):
+
+    log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     logger = logging.getLogger(logger_name)
 
-    # Create handlers
-    if logger_type == 'console':
-        handler = logging.StreamHandler(sys.stdout)
+    logger.setLevel(log_levels[logging_level.lower()])
 
+    if logger_type == 'console':
+        handler = logging.StreamHandler()
     elif logger_type == 'file':
         log_file_dir = kwargs.get('log_file_dir', "")
         log_file_name = kwargs.get('log_file_name')
@@ -23,13 +29,9 @@ def get_logger(logger_name, logger_type, logging_level,  **kwargs):
     else:
         raise ValueError(f"Unrecognized logger_type: {logger_type}")
 
-    handler.setLevel(logging_level)
+    formatter = logging.Formatter(log_format)
+    handler.setFormatter(formatter)
 
-    # Create formatters and add it to handlers
-    logger_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    handler.setFormatter(logger_format)
-
-    # Add handlers to the logger
     logger.addHandler(handler)
 
     return logger

@@ -1,5 +1,6 @@
 from collections import defaultdict
 from datetime import datetime, date
+import inspect
 
 from db_worker import DBWorker
 
@@ -9,7 +10,7 @@ import config
 from src.logger import get_logger
 
 
-logger = get_logger('PlannerLogger', 'console', 'INFO')
+logger = get_logger(__name__, 'console', config.GLOBAL_LOG_LEVEL)
 
 DBWorker.set_config(config.db_config)
 
@@ -68,6 +69,7 @@ class Planner:
         return task_planned
 
     def create_plan_from_scratch(self, horizon, start):
+        logger.debug(inspect.currentframe().f_code.co_name)
         plan = Plan.create(horizon=horizon, active=True, start=start)
         self.api.sync_all_objects()
         plan.fill_from_tasks(self.api.tasks)
@@ -283,7 +285,7 @@ class Plan:
         pass
 
     def set_inactive_by_id(self):
-        DBWorker.input(f"update todoist_plan set active = false where id = '{self.id}")
+        DBWorker.input(f"update todoist_plan set active = false where id = '{self.id}'")
 
     @classmethod
     def set_inactive_by_horizon(cls, horizon):

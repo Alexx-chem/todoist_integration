@@ -1,6 +1,8 @@
 import joblib
 import json
 import os
+from operator import itemgetter
+import inspect
 from todoist_api_python.api import TodoistAPI as Rest_API, Task
 from todoist.api import TodoistAPI as Sync_API
 from collections import defaultdict
@@ -16,7 +18,7 @@ from src.functions import set_db_timezone
 from src.logger import get_logger
 
 
-logger = get_logger('ApiLogger', 'console', 'INFO')
+logger = get_logger(__name__, 'console', config.GLOBAL_LOG_LEVEL)
 
 
 class TodoistApi:
@@ -25,7 +27,7 @@ class TodoistApi:
                                 'projects',
                                 'labels',
                                 'done_tasks',
-                                'task_activity',
+                                'events',
                                 'goals_with_subtasks']
 
     def __init__(self, todoist_api_token):
@@ -37,8 +39,7 @@ class TodoistApi:
         self.tasks = None
         self.projects = None
         self.labels = None
-        self.done_tasks = None
-        self.task_activity = None
+        self.events = None
 
         self.goals_with_subtasks = None
 
@@ -73,22 +74,19 @@ class TodoistApi:
         self.tasks = self._sync_todo_tasks()
         self.projects = self._sync_projects()
         self.labels = self._sync_labels()
-        self.task_activity = self._sync_activity()
-        self.done_tasks = self._sync_done_tasks(self.projects)
+        self.events = self._sync_events()
 
     def sync_all_objects(self):
         logger.debug("sync_all_objects")
 
         tasks = self._sync_todo_tasks()
         projects = self._sync_projects()
-        done_tasks = self._sync_done_tasks(projects)
 
         scope = {
             'tasks': tasks,
             'projects': projects,
             'labels': self._sync_labels(),
-            'done_tasks': done_tasks,
-            'task_activity': self._sync_activity()
+            'events': self._sync_events()
         }
 
         self._process_scope_diff(scope)
@@ -100,28 +98,52 @@ class TodoistApi:
 
         task_to_action_map = []
 
-        out_of_scope_tasks = self.tasks.keys() - scope['tasks'].keys()
-        print('out_of_scope_tasks', out_of_scope_tasks)
+        # Tasks present only in local scope, not in synced
+        stale_task_ids = self.tasks.keys() - scope['tasks'].keys()
+        print('stale_task_ids', stale_task_ids)
 
-        new_tasks = scope['tasks'].keys() - self.tasks.keys() - self.done_tasks.keys()
-        print('new_tasks', new_tasks)
-        task_to_action_map.extend([(task_id, 'created') for task_id in new_tasks])
+        # Completed tasks
+        completed_task_ids = stale_task_ids & scope['events']['completed'].keys()
+        print('completed_task_ids', completed_task_ids)
+        task_to_action_map.extend([(task_id, 'done') for task_id in completed_task_ids])
 
-        common_tasks = scope['tasks'].keys() & self.tasks.keys()
-        undone_tasks = scope['tasks'].keys() & self.done_tasks.keys()
-        modified_tasks = self._get_tasks_diff(scope, common_tasks)
-        modified_done_tasks = self._get_tasks_diff(scope, undone_tasks)
-        print('modified_tasks', modified_tasks | modified_done_tasks)
+        # Deleted tasks
+        deleted_task_ids = stale_task_ids & scope['events']['deleted'].keys()
+        print('deleted_task_ids', deleted_task_ids)
+        task_to_action_map.extend([(task_id, 'deleted') for task_id in deleted_task_ids])
+
+        print('len stale', len(stale_task_ids))
+        print('len completed + deleted', len(completed_task_ids | deleted_task_ids))
+
+        if len(completed_task_ids | deleted_task_ids) != len(stale_task_ids):
+            pass
+
+        # Tasks present only in synced scope, not in local
+        new_and_uncompleted_task_ids = scope['tasks'].keys() - self.tasks.keys()
+        print('new_and_uncompleted_task_ids', new_and_uncompleted_task_ids)
+
+        # Newly created tasks
+        new_task_ids = new_and_uncompleted_task_ids & scope['events']['added'].keys()
+        print('new_task_ids', new_task_ids)
+        task_to_action_map.extend([(task_id, 'created') for task_id in new_task_ids])
+
+        # Uncompleted tasks
+        uncompleted_task_ids = new_and_uncompleted_task_ids & scope['events']['updated'].keys()
+        print('uncompleted_task_ids', uncompleted_task_ids)
+        task_to_action_map.extend([(task_id, 'undone') for task_id in uncompleted_task_ids])
+
+        print('len new and uncompleted', len(new_and_uncompleted_task_ids))
+        print('len new + uncompleted', len(new_task_ids | uncompleted_task_ids))
+
+        # Tasks, present in both synced and local scopes
+        common_task_ids = scope['tasks'].keys() & self.tasks.keys()  # Tasks present both in local and synced scopes
+        # print('common_task_ids', common_task_ids)
+
+        # Tasks, modified in comparison
+        modified_tasks = self._get_tasks_diff(scope, common_task_ids)
+        print('modified_tasks', modified_tasks)
 
         task_to_action_map.extend([(task_id, 'modified') for task_id in modified_tasks])
-
-        completed_tasks = out_of_scope_tasks & scope['done_tasks'].keys()
-        print('completed_tasks', completed_tasks)
-        task_to_action_map.extend([(task_id, 'completed') for task_id in completed_tasks])
-
-        deleted_tasks = out_of_scope_tasks - completed_tasks
-        print('deleted_tasks', deleted_tasks)
-        task_to_action_map.extend([(task_id, 'deleted') for task_id in deleted_tasks])
 
         for task_id, action in task_to_action_map:
 
@@ -195,36 +217,50 @@ class TodoistApi:
         return out
 
     def _sync_todo_tasks(self):
+        logger.debug(inspect.currentframe().f_code.co_name)
         return self._to_dict_by_id(self._extend_tasks(self.rest_api.get_tasks()))
 
     def _sync_done_tasks_by_project(self, project_id):
+        logger.debug(inspect.currentframe().f_code.co_name)
         return self.sync_api.items_archive.for_project(project_id).items()
 
     def _sync_projects(self):
+        logger.debug(inspect.currentframe().f_code.co_name)
         return self._to_dict_by_id(self.rest_api.get_projects())
 
     def _sync_labels(self):
+        logger.debug(inspect.currentframe().f_code.co_name)
         return self._to_dict_by_id(self.rest_api.get_labels())
 
     def _sync_done_tasks(self, projects):
+        logger.debug(inspect.currentframe().f_code.co_name)
         done_tasks = []
         for project_id in projects:
             done_tasks.extend([ExtendedTask(task.data) for task in self._sync_done_tasks_by_project(project_id)])
-            sleep(10)
+            sleep(5)
 
         return self._to_dict_by_id(done_tasks)
 
-    def _sync_activity(self):
+    def _sync_events(self):
+        logger.debug(inspect.currentframe().f_code.co_name)
         # This is dumb! requests.get does not work! But curl does.
-        activity = os.popen(f'curl https://api.todoist.com/sync/{config.TODOIST_API_VERSION}/activity/get '
-                            f'-H "Authorization: Bearer {self.token}"').read()
-        all_events = json.loads(activity)['events']
+        # limit=100 is the max value for one page. Documented "cursor" and "has_more" fields are absent in the response
+        response = os.popen(f'curl https://api.todoist.com/sync/{config.TODOIST_API_VERSION}/activity/get?limit=100 '
+                            f'-H "Authorization: Bearer {self.token}"')
 
-        res = {}
-        for event in all_events:
-            event['is_completed'] = True if event['event_type'] == 'completed' else False
-            event['is_deleted'] = True if event['event_type'] == 'deleted' else False
-            res[event['object_id']] = event
+        activity = json.loads(response.read())
+        all_events = activity['events']
+        all_events_sorted_by_date = sorted(all_events, key=itemgetter('event_date'))
+
+        res = defaultdict(dict)
+        seen = set()
+
+        for event in all_events_sorted_by_date:
+            event['is_completed'] = event['event_type'] == 'completed'
+            event['is_deleted'] = event['event_type'] == 'deleted'
+            if event['object_id'] not in seen:
+                res[event['event_type']][event['object_id']] = event
+                seen.add(event['object_id'])
 
         return res
 
@@ -233,9 +269,9 @@ class TodoistApi:
         return [ExtendedTask(task) for task in tasks]
 
     def _get_tasks_diff(self, tasks_dict, tasks_ids):
-        res = set()
+        res = {}
         for task_id in tasks_ids:
             for key in self.tasks[task_id].__dict__:
                 if self.tasks[task_id].__dict__[key] != tasks_dict['tasks'][task_id].__dict__[key]:
-                    res.add(task_id)
+                    res[task_id] = {}
         return res

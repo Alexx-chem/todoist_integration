@@ -143,11 +143,13 @@ class TodoistApi:
 
     def refresh_plans(self):
         reports = self.planner.refresh_plans()
+        delete_previous = True
         for horizon in reports:
             report_text = f"Report for {horizon} plan:\n"
             report_text += '\n'.join(reports[horizon])
             logger.info(report_text)
-            self._send_message_via_bot(report_text, delete_previous=True)
+            self._send_message_via_bot(report_text, delete_previous=delete_previous)
+            delete_previous = False
 
     def get_plan_reports(self):
         for horizon in self.planner.plans:

@@ -26,7 +26,6 @@ class TodoistApi:
     OBJECTS_COLLECTION_NAMES = ['tasks',
                                 'projects',
                                 'labels',
-                                'done_tasks',
                                 'events',
                                 'goals_with_subtasks']
 
@@ -105,7 +104,7 @@ class TodoistApi:
         # Completed tasks
         completed_task_ids = stale_task_ids & scope['events']['completed'].keys()
         print('completed_task_ids', completed_task_ids)
-        task_to_action_map.extend([(task_id, 'done') for task_id in completed_task_ids])
+        task_to_action_map.extend([(task_id, 'completed') for task_id in completed_task_ids])
 
         # Deleted tasks
         deleted_task_ids = stale_task_ids & scope['events']['deleted'].keys()
@@ -114,9 +113,6 @@ class TodoistApi:
 
         print('len stale', len(stale_task_ids))
         print('len completed + deleted', len(completed_task_ids | deleted_task_ids))
-
-        if len(completed_task_ids | deleted_task_ids) != len(stale_task_ids):
-            pass
 
         # Tasks present only in synced scope, not in local
         new_and_uncompleted_task_ids = scope['tasks'].keys() - self.tasks.keys()
@@ -147,9 +143,7 @@ class TodoistApi:
 
         for task_id, action in task_to_action_map:
 
-            if action == "completed":
-                task = scope['done_tasks'][task_id]
-            elif action == "deleted":
+            if action in ("completed", "deleted"):
                 task = self.tasks[task_id]
             else:
                 task = scope['tasks'][task_id]
@@ -233,6 +227,7 @@ class TodoistApi:
         return self._to_dict_by_id(self.rest_api.get_labels())
 
     def _sync_done_tasks(self, projects):
+        # Heavy operation, avoid to use
         logger.debug(inspect.currentframe().f_code.co_name)
         done_tasks = []
         for project_id in projects:
@@ -250,7 +245,7 @@ class TodoistApi:
 
         activity = json.loads(response.read())
         all_events = activity['events']
-        all_events_sorted_by_date = sorted(all_events, key=itemgetter('event_date'))
+        all_events_sorted_by_date = sorted(all_events, key=itemgetter('event_date'), reverse=True)
 
         res = defaultdict(dict)
         seen = set()

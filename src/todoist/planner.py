@@ -114,6 +114,8 @@ class Plan:
 
     def process_task(self, task: ExtendedTask, action: str) -> bool:
 
+        assert action in config.task_actions, f"Unknown task action '{action}' for task {task.id}"
+
         task_fits_the_plan = self._task_fits_the_plan(task)
 
         task_status_log = self.tasks.get(task.id)
@@ -126,7 +128,8 @@ class Plan:
                 f'{action.capitalize()} task {task.id} is already present in the plan {self.id}!'
 
             self.add_task_to_plan(task.id, 'planned')
-            logger.info(f'{action.capitalize()} task "{task.content}" ({task.id}) is planned to the {self.horizon} plan')
+            logger.info(f'{action.capitalize()} task "{task.content}" ({task.id}) '
+                        f'is planned to the {self.horizon} plan')
             return True
 
         if action == 'modified' and task_fits_the_plan and 'planned' in possible_new_statuses:

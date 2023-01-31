@@ -39,7 +39,8 @@ horizons = {
 task_actions = ['created',
                 'modified',
                 'completed',
-                'deleted']
+                'deleted',
+                'loaded']
 
 status_transitions = {
     'new': ('planned', ),

@@ -244,7 +244,7 @@ class TodoistApi:
         logger.debug(inspect.currentframe().f_code.co_name)
         # This is dumb! requests.get does not work! But curl does.
         # limit=100 is the max value for one page. Documented "cursor" and "has_more" fields are absent in the response
-        response = os.popen(f'curl https://api.todoist.com/sync/{config.TODOIST_API_VERSION}/activity/get?limit=100 '
+        response = os.popen(f'curl -s https://api.todoist.com/sync/{config.TODOIST_API_VERSION}/activity/get?limit=100 '
                             f'-H "Authorization: Bearer {self.token}"')
 
         activity = json.loads(response.read())

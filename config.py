@@ -21,10 +21,12 @@ db_config = {'dbhost': 'localhost',
 
 # Todoist planner config
 
-todoist_date_format = '%Y-%m-%d'
+TODOIST_SYNC_TIMEOUT_SECONDS = 90
 
-goal_label_name = "Цель"
-success_label_name = "Успех"
+TODOIST_DATE_FORMAT = '%Y-%m-%d'
+
+GOAL_LABEL_NAME = "Цель"
+SUCCESS_LABEL_NAME = "Успех"
 
 
 horizons = {
@@ -32,7 +34,7 @@ horizons = {
     'week': {'due_date': None},
     'month': {'label': "Месяц"},
     'quarter': {'label': "Месяц"},
-    'year': {'label': goal_label_name,
+    'year': {'label': GOAL_LABEL_NAME,
              'priority':  4}
 }
 

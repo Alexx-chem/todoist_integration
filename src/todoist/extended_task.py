@@ -19,7 +19,7 @@ class ExtendedTask(Task):
             self.__dict__.update(task)
             self.is_completed = True
 
-        self.is_goal = config.goal_label_name in self.labels
+        self.is_goal = config.GOAL_LABEL_NAME in self.labels
         self.is_active_goal = bool(not self.is_completed and self.is_goal and self.priority in (3, 4))
 
         self.is_active_with_due = bool(not self.is_completed and self.priority in (3, 4) and self.due)
@@ -42,4 +42,4 @@ class ExtendedTask(Task):
             return True
 
         if self.is_active_with_due:
-            return datetime.strptime(self.due.date, config.todoist_date_format).date() <= datetime.now().date()
+            return datetime.strptime(self.due.date, config.TODOIST_DATE_FORMAT).date() <= datetime.now().date()

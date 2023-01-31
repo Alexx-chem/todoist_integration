@@ -6,7 +6,7 @@ import inspect
 from todoist_api_python.api import TodoistAPI as Rest_API, Task
 from todoist.api import TodoistAPI as Sync_API
 from collections import defaultdict
-from typing import Callable, Iterable, List
+from typing import Callable, Iterable, Set
 import requests
 from time import sleep
 
@@ -179,11 +179,11 @@ class TodoistApi:
         pass
 
     def _get_goals_with_subtasks(self):
-        goals = [self.tasks[task] for task in self.tasks if config.goal_label_name in self.tasks[task].labels]
+        goals = [self.tasks[task] for task in self.tasks if config.GOAL_LABEL_NAME in self.tasks[task].labels]
         return tuple(zip(goals, [self._get_subtasks(goal) for goal in goals]))
 
     def _check_success_label(self, tasks):
-        return self._check_label_among_tasks(tasks, config.success_label_name)
+        return self._check_label_among_tasks(tasks, config.SUCCESS_LABEL_NAME)
 
     @staticmethod
     def _check_label_among_tasks(tasks, label):
@@ -251,13 +251,13 @@ class TodoistApi:
         return res
 
     @staticmethod
-    def _extend_tasks(tasks: Iterable[Task]) -> List[ExtendedTask]:
+    def _extend_tasks(tasks: Iterable[Task]) -> Set[ExtendedTask]:
         return [ExtendedTask(task) for task in tasks]
 
     def _get_tasks_diff(self, tasks_dict, tasks_ids):
-        res = {}
+        res = set()
         for task_id in tasks_ids:
             for key in self.tasks[task_id].__dict__:
                 if self.tasks[task_id].__dict__[key] != tasks_dict['tasks'][task_id].__dict__[key]:
-                    res[task_id] = {}
+                    res.add(task_id)
         return res

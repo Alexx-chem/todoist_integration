@@ -253,7 +253,7 @@ class Plan:
         if task.due is None:
             return False
 
-        due_date = datetime.strptime(task.due.date, config.todoist_date_format).date()
+        due_date = datetime.strptime(task.due.date, config.TODOIST_DATE_FORMAT).date()
         return self.start <= due_date <= self.end
 
     def add_task_to_plan(self, task_id, status):

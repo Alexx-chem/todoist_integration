@@ -19,4 +19,4 @@ if __name__ == '__main__':
 
     while True:
         todoist_api.sync_all_objects()
-        sleep(60)
+        sleep(config.TODOIST_SYNC_TIMEOUT_SECONDS)

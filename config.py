@@ -41,6 +41,7 @@ horizons = {
 task_actions = ['created',
                 'modified',
                 'completed',
+                'uncompleted',
                 'deleted',
                 'loaded']
 

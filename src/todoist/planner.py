@@ -26,6 +26,8 @@ class Planner:
     def refresh_plans(self):
         today = get_today()
 
+        reports = {}
+
         for horizon in config.horizons.keys():
 
             try:
@@ -34,7 +36,8 @@ class Planner:
                 if plan.end < today:
                     logger.info(f'Plan for the {horizon} is outdated! Creating a report and a new plan')
                     
-                    plan.report()
+                    reports[horizon] = plan.report()
+
                     plan.set_inactive_by_id()
 
                     plan = self.create_plan_from_scratch(horizon, today)
@@ -47,6 +50,8 @@ class Planner:
                 plan = self.create_plan_from_scratch(horizon, today)
 
             self.plans[horizon] = plan
+
+        return reports
 
     def process_task(self, task: ExtendedTask, action: str) -> bool:
         """
@@ -132,9 +137,13 @@ class Plan:
                         f'is planned to the {self.horizon} plan')
             return True
 
-        if action == 'modified' and task_fits_the_plan and 'planned' in possible_new_statuses:
-            self.add_task_to_plan(task.id, 'planned')
-            logger.info(f'Task "{task.content}" ({task.id}) is planned to the {self.horizon} plan')
+        if action in ('modified', 'uncompleted'):
+            if task_fits_the_plan and 'planned' in possible_new_statuses:
+                self.add_task_to_plan(task.id, 'planned')
+                logger.info(f'Task "{task.content}" ({task.id}) is planned to the {self.horizon} plan')
+            elif 'postponed' in possible_new_statuses:
+                self.add_task_to_plan(task.id, 'postponed')
+                logger.info(f'Task "{task.content}" ({task.id}) is postponed from the {self.horizon} plan')
             return True
 
         if action in ('deleted', 'completed') and action in possible_new_statuses:
@@ -233,17 +242,6 @@ class Plan:
 
         return stats
 
-    def temp_count_stats(self):
-        # TODO make analytics system
-
-        print(self.stats)
-
-        completion_ratio = (self.stats['completed'] / (self.stats['completed'] + self.stats['planned'])) * 100
-        overall_tasks_qty = sum(self.stats.values())
-
-        print('completion_ratio ', "{:.2f}".format(completion_ratio), '%', sep='')
-        print('overall_tasks_qty', overall_tasks_qty)
-
     def fill_from_tasks(self, tasks: dict):
         for task_id in tasks:
             task = tasks[task_id]
@@ -284,8 +282,24 @@ class Plan:
         return count_by_status
 
     def report(self):
+        self.stats = self.get_tasks_stats()
         # TODO сделать отчёт по плану!
-        pass
+        qty_planned = self.stats['by_status']['planned']
+        qty_completed = self.stats['by_status']['completed']
+        qty_deleted = self.stats['by_status']['deleted']
+        qty_postponed = self.stats['by_status']['postponed']
+        qty_overall_planned = sum((qty_completed, qty_planned, qty_postponed, qty_deleted))
+
+        completion_ratio = (qty_completed / (qty_completed + qty_planned)) * 100
+
+        report = [f"{qty_completed} completed tasks",
+                  f"{qty_planned} not completed planned tasks",
+                  f"{qty_postponed} postponed tasks",
+                  f"{qty_deleted} deleted tasks",
+                  f"{qty_overall_planned} overall planned tasks",
+                  f"{'{:.2f}'.format(completion_ratio)}% completion ratio"]
+
+        return report
 
     def set_inactive_by_id(self):
         DBWorker.input(f"update todoist_plan set active = false where id = '{self.id}'")

@@ -6,7 +6,7 @@ import inspect
 from todoist_api_python.api import TodoistAPI as Rest_API, Task
 from todoist.api import TodoistAPI as Sync_API
 from collections import defaultdict
-from typing import Callable, Iterable, Set
+from typing import Callable, Iterable, List
 import requests
 from time import sleep
 
@@ -119,9 +119,9 @@ class TodoistApi:
         task_to_action_map.extend([(task_id, 'created') for task_id in new_task_ids])
 
         # Uncompleted tasks
-        uncompleted_task_ids = new_and_uncompleted_task_ids & scope['events']['updated'].keys()
+        uncompleted_task_ids = new_and_uncompleted_task_ids & scope['events']['uncompleted'].keys()
         logger.debug(f'uncompleted_task_ids {uncompleted_task_ids}')
-        task_to_action_map.extend([(task_id, 'undone') for task_id in uncompleted_task_ids])
+        task_to_action_map.extend([(task_id, 'uncompleted') for task_id in uncompleted_task_ids])
 
         # Tasks, present in both synced and local scopes
         common_task_ids = scope['tasks'].keys() & self.tasks.keys()  # Tasks present both in local and synced scopes
@@ -141,8 +141,21 @@ class TodoistApi:
 
             self.planner.process_task(task, action)
 
-    def _process_modified_tasks(self, curr_objects, sync_objects, common_obj_ids):
-        pass
+    def refresh_plans(self):
+        reports = self.planner.refresh_plans()
+        for horizon in reports:
+            report_text = f"Report for {horizon} plan:\n"
+            report_text += '\n'.join(reports[horizon])
+            logger.info(report_text)
+            self._send_message_via_bot(report_text, delete_previous=True)
+
+    def get_plan_reports(self):
+        for horizon in self.planner.plans:
+            report = self.planner.plans[horizon].report()
+            report_text = f"Report for {horizon} plan:\n"
+            report_text += '\n'.join(report)
+            logger.info(report_text)
+            self._send_message_via_bot(report_text, delete_previous=True)
 
     @staticmethod
     def _send_message_via_bot(text, delete_previous=False, save_msg_to_db=True):
@@ -159,7 +172,7 @@ class TodoistApi:
             logger.error('Connection to Telegram Bot Core is unsuccessful')
 
     @staticmethod
-    def _to_dict_by_id(lst: list):
+    def _to_dict_by_id(lst: Iterable):
         return {obj.id: obj for obj in lst}
 
     def _get_subtasks(self, task: ExtendedTask):
@@ -251,7 +264,7 @@ class TodoistApi:
         return res
 
     @staticmethod
-    def _extend_tasks(tasks: Iterable[Task]) -> Set[ExtendedTask]:
+    def _extend_tasks(tasks: Iterable[Task]) -> List[ExtendedTask]:
         return [ExtendedTask(task) for task in tasks]
 
     def _get_tasks_diff(self, tasks_dict, tasks_ids):

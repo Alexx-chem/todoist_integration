@@ -52,3 +52,10 @@ status_transitions = {
     'completed': ('planned', 'deleted'),
     'deleted': (None, )
 }
+
+report_sections_marks = {'completed': '\U00002705',
+                         'not_completed': '\U0000274C',
+                         'postponed': '\U0001F4C6',
+                         'deleted': '\U0001F5D1',
+                         'overall_planned': '\U0001F4CB',
+                         'compl_ratio': '\U0001F4C8'}

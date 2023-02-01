@@ -6,7 +6,7 @@ import inspect
 from todoist_api_python.api import TodoistAPI as Rest_API, Task
 from todoist.api import TodoistAPI as Sync_API
 from collections import defaultdict
-from typing import Callable, Iterable, List
+from typing import Callable, Iterable, List, Dict, Set
 import requests
 from time import sleep
 
@@ -97,16 +97,13 @@ class TodoistApi:
 
         task_to_action_map = []
 
-        # Tasks present only in local scope, not in synced
-        stale_task_ids = self.tasks.keys() - scope['tasks'].keys()
-
         # Completed tasks
-        completed_task_ids = stale_task_ids & scope['events']['completed'].keys()
+        completed_task_ids = self.tasks.keys() & scope['events']['completed'].keys()
         logger.debug(f'completed_task_ids {completed_task_ids}')
         task_to_action_map.extend([(task_id, 'completed') for task_id in completed_task_ids])
 
         # Deleted tasks
-        deleted_task_ids = stale_task_ids & scope['events']['deleted'].keys()
+        deleted_task_ids = (self.tasks.keys() - scope['tasks'].keys()) & scope['events']['deleted'].keys()
         logger.debug(f'deleted_task_ids {deleted_task_ids}')
         task_to_action_map.extend([(task_id, 'deleted') for task_id in deleted_task_ids])
 
@@ -145,33 +142,38 @@ class TodoistApi:
         reports = self.planner.refresh_plans()
         delete_previous = True
         for horizon in reports:
-            report_text = f"Report for {horizon} plan:\n"
-            report_text += '\n'.join(reports[horizon])
+            report_text = self._format_report(reports[horizon], horizon)
             logger.info(report_text)
             self._send_message_via_bot(report_text, delete_previous=delete_previous)
             delete_previous = False
 
-    def get_plan_reports(self):
-        for horizon in self.planner.plans:
-            report = self.planner.plans[horizon].report()
-            report_text = f"Report for {horizon} plan:\n"
-            report_text += '\n'.join(report)
-            logger.info(report_text)
-            self._send_message_via_bot(report_text, delete_previous=True)
+    @staticmethod
+    def _format_report(report, horizon, html=True):
+        report_text = f"Report for {horizon} plan:\n\n\n"
+        if html:
+            report_text = "<b>" + report_text + "</b>"
+
+        for section in report:
+            if html:
+                report_text += config.report_sections_marks[section] + ' '
+            report_text += report[section] + '\n\n'
+
+        return report_text
+
+    def get_plan_report(self, horizon):
+        return self.planner.plans[horizon].report()
 
     @staticmethod
     def _send_message_via_bot(text, delete_previous=False, save_msg_to_db=True):
         request = 'http://127.0.0.1:5000/send_message/'
         request += f'?chat_id={config.ALEXX_TG_CHAT_ID}'
         request += f'&text={text}'
-        if delete_previous:
-            request += f'&delete_previous=true'
-        if save_msg_to_db:
-            request += f'&save_msg_to_db=true'
+        request += f'&delete_previous=true' if delete_previous else ''
+        request += f'&save_msg_to_db=true' if save_msg_to_db else ''
         try:
             requests.post(request)
         except requests.exceptions.ConnectionError:
-            logger.error('Connection to Telegram Bot Core is unsuccessful')
+            logger.error('Connection to Telegram Bot Core was unsuccessful')
 
     @staticmethod
     def _to_dict_by_id(lst: Iterable):
@@ -216,23 +218,39 @@ class TodoistApi:
 
         return out
 
-    def _sync_todo_tasks(self):
+    def _sync_todo_tasks(self) -> Dict:
         logger.debug(inspect.currentframe().f_code.co_name)
-        return self._to_dict_by_id(self._extend_tasks(self.rest_api.get_tasks()))
+        try:
+            return self._to_dict_by_id(self._extend_tasks(self.rest_api.get_tasks()))
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f'Sync error. {e}')
+            return self.tasks
 
-    def _sync_done_tasks_by_project(self, project_id):
+    def _sync_done_tasks_by_project(self, project_id: str) -> List:
         logger.debug(inspect.currentframe().f_code.co_name)
-        return self.sync_api.items_archive.for_project(project_id).items()
+        try:
+            return self.sync_api.items_archive.for_project(project_id).items()
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f'Sync error. {e}')
+            return []
 
-    def _sync_projects(self):
+    def _sync_projects(self) -> Dict:
         logger.debug(inspect.currentframe().f_code.co_name)
-        return self._to_dict_by_id(self.rest_api.get_projects())
+        try:
+            return self._to_dict_by_id(self.rest_api.get_projects())
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f'Sync error. {e}')
+            return self.projects
 
-    def _sync_labels(self):
+    def _sync_labels(self) -> Dict:
         logger.debug(inspect.currentframe().f_code.co_name)
-        return self._to_dict_by_id(self.rest_api.get_labels())
+        try:
+            return self._to_dict_by_id(self.rest_api.get_labels())
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f'Sync error. {e}')
+            return self.labels
 
-    def _sync_done_tasks(self, projects):
+    def _sync_done_tasks(self, projects: List) -> Dict:
         # Heavy operation, avoid to use
         logger.debug(inspect.currentframe().f_code.co_name)
         done_tasks = []
@@ -242,7 +260,7 @@ class TodoistApi:
 
         return self._to_dict_by_id(done_tasks)
 
-    def _sync_events(self):
+    def _sync_events(self) -> Dict:
         logger.debug(inspect.currentframe().f_code.co_name)
         # This is dumb! requests.get does not work! But curl does.
         # limit=100 is the max value for one page. Documented "cursor" and "has_more" fields are absent in the response
@@ -269,7 +287,7 @@ class TodoistApi:
     def _extend_tasks(tasks: Iterable[Task]) -> List[ExtendedTask]:
         return [ExtendedTask(task) for task in tasks]
 
-    def _get_tasks_diff(self, tasks_dict, tasks_ids):
+    def _get_tasks_diff(self, tasks_dict: Dict, tasks_ids: Iterable) -> Set:
         res = set()
         for task_id in tasks_ids:
             for key in self.tasks[task_id].__dict__:

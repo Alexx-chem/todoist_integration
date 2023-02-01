@@ -283,7 +283,7 @@ class Plan:
 
     def report(self):
         self.stats = self.get_tasks_stats()
-        # TODO сделать отчёт по плану!
+
         qty_planned = self.stats['by_status']['planned']
         qty_completed = self.stats['by_status']['completed']
         qty_deleted = self.stats['by_status']['deleted']
@@ -292,12 +292,12 @@ class Plan:
 
         completion_ratio = (qty_completed / (qty_completed + qty_planned)) * 100
 
-        report = [f"{qty_completed} completed tasks",
-                  f"{qty_planned} not completed planned tasks",
-                  f"{qty_postponed} postponed tasks",
-                  f"{qty_deleted} deleted tasks",
-                  f"{qty_overall_planned} overall planned tasks",
-                  f"{'{:.2f}'.format(completion_ratio)}% completion ratio"]
+        report = {'completed': f"{qty_completed} completed tasks",
+                  'not_completed': f"{qty_planned} not completed planned tasks",
+                  'postponed': f"{qty_postponed} postponed tasks",
+                  'deleted': f"{qty_deleted} deleted tasks",
+                  'overall_planned': f"{qty_overall_planned} overall planned tasks",
+                  'compl_ratio': f"{'{:.2f}'.format(completion_ratio)}% completion ratio"}
 
         return report
 

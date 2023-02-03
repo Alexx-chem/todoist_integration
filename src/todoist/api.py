@@ -3,7 +3,7 @@ import json
 import os
 from operator import itemgetter
 import inspect
-from todoist_api_python.api import TodoistAPI as Rest_API, Task
+from todoist_api_python.api import TodoistAPI as Rest_API, Task  # , Project, Label
 from todoist.api import TodoistAPI as Sync_API
 from collections import defaultdict
 from typing import Callable, Iterable, List, Dict, Set
@@ -11,6 +11,8 @@ import requests
 from time import sleep
 
 import config
+
+from db_worker import DBWorker
 
 from src.todoist.extended_task import ExtendedTask
 from src.todoist.planner import Planner
@@ -25,9 +27,9 @@ class TodoistApi:
 
     OBJECTS_COLLECTION_NAMES = ['tasks',
                                 'projects',
+                                'sections',
                                 'labels',
-                                'events',
-                                'goals_with_subtasks']
+                                'events']
 
     def __init__(self, todoist_api_token):
         logger.debug("TodoistApi init")
@@ -35,12 +37,8 @@ class TodoistApi:
         self.sync_api = Sync_API(todoist_api_token, api_version=config.TODOIST_API_VERSION)
         self.token = todoist_api_token
 
-        self.tasks = None
-        self.projects = None
-        self.labels = None
-        self.events = None
-
-        self.goals_with_subtasks = None
+        for collection in self.OBJECTS_COLLECTION_NAMES:
+            vars(self)[collection] = None
 
         self.planner = Planner(self)
 
@@ -54,20 +52,24 @@ class TodoistApi:
         except (FileNotFoundError, Exception) as e:
             logger.warning(e)
             self._fill_objects_from_api()
-            self.goals_with_subtasks = self._get_goals_with_subtasks()
 
         else:
             self.sync_all_objects()
 
-        self._save_all_objects()
+        self._save_all_objects_to_file()
 
-    def _save_all_objects(self):
-        scope = {collection: self.__dict__[collection] for collection in self.OBJECTS_COLLECTION_NAMES}
+    def _save_all_objects_to_file(self):
+        scope = {collection: vars(self)[collection] for collection in self.OBJECTS_COLLECTION_NAMES}
         joblib.dump(scope, 'todoist_scope')
+
+    def _save_all_objects_to_db(self, target: tuple = ('db',)):
+        scope = {collection: vars(self)[collection] for collection in self.OBJECTS_COLLECTION_NAMES}
+        for collection in self.OBJECTS_COLLECTION_NAMES:
+            DBWorker.input()
 
     def _load_all_objects(self):
         scope = joblib.load('todoist_scope')
-        self.__dict__.update(scope)
+        vars(self).update(scope)
 
     def _fill_objects_from_api(self):
         self.tasks = self._sync_todo_tasks()
@@ -89,9 +91,8 @@ class TodoistApi:
         }
 
         self._process_scope_diff(scope)
-        self.__dict__.update(scope)
-        self.goals_with_subtasks = self._get_goals_with_subtasks()
-        self._save_all_objects()
+        vars(self).update(scope)
+        self._save_all_objects_to_file()
 
     def _process_scope_diff(self, scope):
 
@@ -208,7 +209,7 @@ class TodoistApi:
 
     def _filter_goals(self, subtasks_filter: Callable):
         out = defaultdict(list)
-        for goal, subtasks in self.goals_with_subtasks:
+        for goal, subtasks in self._get_goals_with_subtasks():
 
             filtered_subs = any(subtasks_filter(subtasks))
 
@@ -260,16 +261,35 @@ class TodoistApi:
 
         return self._to_dict_by_id(done_tasks)
 
-    def _sync_events(self) -> Dict:
+    def _sync_events(self, page_limit=1, request_limit=100) -> Dict:
         logger.debug(inspect.currentframe().f_code.co_name)
         # This is dumb! requests.get does not work! But curl does.
-        # limit=100 is the max value for one page. Documented "cursor" and "has_more" fields are absent in the response
-        response = os.popen(f'curl -s https://api.todoist.com/sync/{config.TODOIST_API_VERSION}/activity/get?limit=100 '
-                            f'-H "Authorization: Bearer {self.token}"')
+        # request_limit=100 is the max value for one page.
 
-        activity = json.loads(response.read())
-        all_events = activity['events']
-        all_events_sorted_by_date = sorted(all_events, key=itemgetter('event_date'), reverse=True)
+        events = []
+
+        page = 0
+        while page <= page_limit:
+            offset_step = 0
+
+            while True:
+                activity = self._get_activity_page(request_limit, offset_step*request_limit, page)
+                try:
+                    events.extend(activity['events'])
+                    print('page =', page, 'offset =', offset_step*request_limit)
+                except KeyError:
+                    print(activity)
+
+                total_in_page = activity['count']
+                max_offset_steps = total_in_page // request_limit
+
+                if max_offset_steps == offset_step:
+                    break
+
+                offset_step += 1
+            page += 1
+
+        all_events_sorted_by_date = sorted(events, key=itemgetter('event_date'), reverse=True)
 
         res = defaultdict(dict)
         seen = set()
@@ -281,7 +301,22 @@ class TodoistApi:
                 res[event['event_type']][event['object_id']] = event
                 seen.add(event['object_id'])
 
+        # Getting events diff, to not process already processed events
+        for event_type in res:
+            # TODO неправильно сделал, на первый раз все старые удаляются, и потом все, что прилетели -- как новые
+            res[event_type] = {k: v for k, v in res[event_type].items()
+                               if k not in self.events[event_type]
+                               or v != self.events[event_type][k]}
+
         return res
+
+    def _get_activity_page(self, limit, offset, page):
+        request = f'curl -s https://api.todoist.com/sync/{config.TODOIST_API_VERSION}/activity/get/ ' \
+                  f'-H "Authorization: Bearer {self.token}" '
+        request += f'-d page={page} -d limit={limit} -d offset={offset} '
+        print(request)
+        response = os.popen(request)
+        return json.loads(response.read())
 
     @staticmethod
     def _extend_tasks(tasks: Iterable[Task]) -> List[ExtendedTask]:
@@ -290,7 +325,23 @@ class TodoistApi:
     def _get_tasks_diff(self, tasks_dict: Dict, tasks_ids: Iterable) -> Set:
         res = set()
         for task_id in tasks_ids:
-            for key in self.tasks[task_id].__dict__:
-                if self.tasks[task_id].__dict__[key] != tasks_dict['tasks'][task_id].__dict__[key]:
+            for property_key in vars(self.tasks[task_id]):
+                old_property_value = vars(self.tasks[task_id])[property_key]
+                new_property_value = vars(tasks_dict['tasks'][task_id])[property_key]
+                if old_property_value != new_property_value:
+                    if property_key == 'due':
+                        if self._due_same_except_string(old_property_value, new_property_value):
+                            logger.debug(f'due.string changed: {self.tasks[task_id].content}')
+                            continue
+
                     res.add(task_id)
         return res
+
+    @staticmethod
+    def _due_same_except_string(task_due_1, task_due_2) -> bool:
+        # Patch. Field 'due.string' is changing at the server side at midnight!
+        if None not in (task_due_1, task_due_2):
+            return all([vars(task_due_1)[key] == vars(task_due_2)[key]
+                        for key in vars(task_due_1) if key != 'string'])
+
+        return False

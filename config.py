@@ -1,5 +1,5 @@
 # Common
-GLOBAL_LOG_LEVEL = 'INFO'
+GLOBAL_LOG_LEVEL = 'DEBUG'
 
 # Todoist connection
 ALEXX_TODOIST_ID = '***REMOVED***'
@@ -16,7 +16,7 @@ ALEXX_TG_CHAT_ID = '***REMOVED***'
 db_config = {'dbhost': 'localhost',
              'dbuser': 'postgres',
              'dbpass': '***REMOVED***',
-             'dbname': 'consensus',
+             'dbname': 'todoist',
              'dbport': 5432}
 
 # Todoist planner config

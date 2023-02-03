@@ -157,8 +157,7 @@ class Plan:
     def delete_from_db(cls, horizon: str = None, plan_id: int = None, active: bool = None):
         if not all(locals()):
             raise AttributeError('At least one of the params must be set!')
-        query = f"delete from todoist_plan " \
-                f"where 1=1 "
+        query = f"delete from plans where 1=1 "
         query += f"and horizon = '{horizon}' " if horizon is not None else ""
         query += f"and plan_id = '{plan_id}' " if plan_id is not None else ""
         query += f"and active = ' {active}' " if active is not None else ""
@@ -169,7 +168,7 @@ class Plan:
     def create(cls, horizon: str, active: bool, start: date):
         end = horizon_to_date[horizon]()
 
-        plan_id = DBWorker.input(f"insert into todoist_plan (horizon, active, start_date, end_date) "
+        plan_id = DBWorker.input(f"insert into plans (horizon, active, start_date, end_date) "
                                  f"values ('{horizon}', '{active}', '{start}', '{end}') "
                                  f"returning id")
 
@@ -193,7 +192,7 @@ class Plan:
             raise AttributeError('Attempt to load the last active plan with passing explicit exact id')
 
         query = f"select id, horizon, active, start_date, end_date " \
-                f"from todoist_plan "
+                f"from plans "
 
         if horizon:
             query += f"where active = true and horizon = '{horizon}'"
@@ -225,7 +224,7 @@ class Plan:
         tasks_dict = defaultdict(list)
 
         tasks_db = DBWorker.select(f"select task_id, status, timestamp "
-                                   f"from todoist_planned_task "
+                                   f"from tasks_in_plans "
                                    f"where plan_id = {self.id} "
                                    f"order by task_id, timestamp")
         for task_row in tasks_db:
@@ -255,7 +254,7 @@ class Plan:
         return self.start <= due_date <= self.end
 
     def add_task_to_plan(self, task_id, status):
-        record_id, timestamp = DBWorker.input(f"insert into todoist_planned_task (task_id, status, timestamp, plan_id)"
+        record_id, timestamp = DBWorker.input(f"insert into tasks_in_plans (task_id, status, timestamp, plan_id)"
                                               f"values ('{task_id}', '{status}', current_timestamp, {self.id})"
                                               f"returning record_id, timestamp")
 
@@ -302,8 +301,8 @@ class Plan:
         return report
 
     def set_inactive_by_id(self):
-        DBWorker.input(f"update todoist_plan set active = false where id = '{self.id}'")
+        DBWorker.input(f"update plans set active = false where id = '{self.id}'")
 
     @classmethod
     def set_inactive_by_horizon(cls, horizon):
-        DBWorker.input(f"update todoist_plan set active = false where horizon = {horizon}")
+        DBWorker.input(f"update plans set active = false where horizon = {horizon}")

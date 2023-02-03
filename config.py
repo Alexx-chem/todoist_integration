@@ -26,14 +26,47 @@ TODOIST_SYNC_TIMEOUT = 600  # seconds
 TODOIST_DATE_FORMAT = '%Y-%m-%d'
 TODOIST_DATETIME_FORMAT = '%Y-%m-%dT%H:%M:%S:%fZ'
 
+EVENTS_SYNC_FULL_SYNC_PAGES = 52  # One year. One page represents one week according to API docs
+
 SPECIAL_LABELS = {'GOAL_LABEL_NAME': "Цель",
                   'SUCCESS_LABEL_NAME': "Успех"}
 
-ENTITY_TYPES = ['tasks',
-                'projects',
-                'sections',
-                'labels',
-                'events']
+ENTITIES = {'tasks': {'type': 'class',
+                      'db_fields': ['id',
+                                    'due.date',
+                                    'due.datetime',
+                                    'priority',
+                                    'content',
+                                    'project_id',
+                                    'labels',
+                                    'is_completed',
+                                    'is_deleted',
+                                    'is_recurring',
+                                    'parent_id',
+                                    'raw_data']},
+            'projects': {'type': 'class',
+                         'db_fields': ['id',
+                                       'name',
+                                       'parent_id',
+                                       'is_inbox_project',
+                                       'raw_data']},
+            'sections': {'type': 'class',
+                         'db_fields': ['id',
+                                       'name',
+                                       'project_id',
+                                       'raw_data']},
+            'labels': {'type': 'class',
+                       'db_fields': ['id',
+                                     'name',
+                                     'raw_data']},
+            'events': {'type': 'dict',
+                       'db_fields': ['id',
+                                     'object_type',
+                                     'event_type',
+                                     'object_id',
+                                     'event_datetime',
+                                     'raw_data']}
+            }
 
 PLAN_HORIZONS = {
     'day': {'due_date': None},

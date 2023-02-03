@@ -1,15 +1,18 @@
-from typing import Callable, Iterable, List, Dict, Set
+from typing import List, Dict  # , Callable, Iterable, Set
+from requests.exceptions import ConnectionError
 from collections import defaultdict
 from operator import itemgetter
 from datetime import datetime
+from time import sleep
 import inspect
 import json
 import os
 
 from db_worker import DBWorker
 
-from src.todoist.api import TodoistApi
 from src.logger import get_logger
+from src.todoist.api import TodoistApi
+from src.todoist.extended_task import ExtendedTask
 from src.functions import set_db_timezone
 from src.todoist.entity_manager_abc import EntityManagerABC
 import config
@@ -17,29 +20,146 @@ import config
 logger = get_logger(__name__, 'console', config.GLOBAL_LOG_LEVEL)
 
 
-class EntityManager(EntityManagerABC, TodoistApi):
+class EntityManager(EntityManagerABC):
 
-    def __init__(self):
-        super(TodoistApi).__init__(config.TODOIST_API_TOKEN)
+    def __init__(self, localize_db_timezone=True):
         super(EntityManagerABC).__init__()
 
-        for entity_type in config.ENTITY_TYPES:
-            vars(self)[entity_type] = None
+        for entity_name in config.ENTITIES:
+            vars(self)[entity_name] = None
+            vars(self)[f'{entity_name}_manager'] = get_manager(entity_name)
 
-        set_db_timezone()
+        if localize_db_timezone:
+            set_db_timezone()
+
+    def full_sync(self, db_save_mode: str = 'soft'):
+        for entity_name in config.ENTITIES:
+            logger.debug(f'{entity_name}: full_sync')
+            entity_array = []
+            try:
+                entity_array = vars(self)[f'{entity_name}_manager'].full_sync()
+            except ConnectionError as e:
+                logger.error(f'Sync error. {e}')
+
+            self._save_entity_to_db(entity_array, entity_name, db_save_mode)
+
+    def diff_sync(self):
+        pass
+
+    def _save_entity_to_db(self, entity_array, entity_name, db_save_mode):
+        if db_save_mode == 'hard':
+            DBWorker.input(f'delete from {entity_name}')
+
+        elif db_save_mode == 'soft':
+            existing_ids = DBWorker.select(f'select id from {entity_name}')
+
+    @staticmethod
+    def _prepare_values(entity_array, entity_name):
+        entity_type = config.ENTITIES[entity_name]['type']
+        db_fields = config.ENTITIES[entity_name]['db_fields']
+
+        values = [()]
+
+        # TODO Reminders:
+        # unnest method is COLUMN-based approach!
+        # https://trvrm.github.io/bulk-psycopg2-inserts.html
+
+        # raw_data = entity.__dict__ if entity_type == 'class'
+        # raw_data = entity if entity_type == 'dict'
+
+
+def get_manager(entity_name):
+    assert entity_name in config.ENTITIES, f'Unknown entity name: {entity_name}'
+    if entity_name == 'tasks':
+        return TasksManager()
+    if entity_name == 'projects':
+        return ProjectsManager()
+    if entity_name == 'sections':
+        return SectionsManager()
+    if entity_name == 'labels':
+        return LabelsManager()
+    if entity_name == 'events':
+        return EventsManager()
+
+
+class TasksManager(EntityManagerABC, TodoistApi):
+    def __init__(self):
+        EntityManagerABC.__init__(self)
+        TodoistApi.__init__(self, config.TODOIST_API_TOKEN)
 
     def full_sync(self):
+        return self._objects_to_dict_by_id(self._extend_tasks(self.rest_api.get_tasks()))
+
+    def diff_sync(self):
         pass
+
+    def _sync_done_tasks(self, projects: List) -> Dict:
+        # Heavy operation, avoid to use
+        logger.debug(inspect.currentframe().f_code.co_name)
+        done_tasks = []
+        for project_id in projects:
+            done_tasks.extend([ExtendedTask(task.data) for task in self._sync_done_tasks_by_project(project_id)])
+            sleep(5)  # in order to prevent DoS
+
+        return self._objects_to_dict_by_id(done_tasks)
+
+    def _sync_done_tasks_by_project(self, project_id: str) -> List:
+        logger.debug(inspect.currentframe().f_code.co_name)
+        try:
+            return self.sync_api.items_archive.for_project(project_id).items()
+        except ConnectionError as e:
+            logger.error(f'Sync error. {e}')
+            return []
+
+
+class ProjectsManager(EntityManagerABC, TodoistApi):
+    def __init__(self):
+        EntityManagerABC.__init__(self)
+        TodoistApi.__init__(self, config.TODOIST_API_TOKEN)
+
+    def full_sync(self):
+        return self.rest_api.get_projects()
 
     def diff_sync(self):
         pass
 
 
-class EventManager(EntityManagerABC):
+class SectionsManager(EntityManagerABC, TodoistApi):
     def __init__(self):
-        super().__init__()
+        EntityManagerABC.__init__(self)
+        TodoistApi.__init__(self, config.TODOIST_API_TOKEN)
 
-    def diff_sync(self, page_limit=1, request_limit=100) -> List:
+    def full_sync(self):
+        return self.rest_api.get_sections()
+
+    def diff_sync(self):
+        pass
+
+
+class LabelsManager(EntityManagerABC, TodoistApi):
+    def __init__(self):
+        EntityManagerABC.__init__(self)
+        TodoistApi.__init__(self, config.TODOIST_API_TOKEN)
+
+    def full_sync(self):
+        return self.rest_api.get_labels()
+
+    def diff_sync(self):
+        pass
+
+
+class EventsManager(EntityManagerABC, TodoistApi):
+    def __init__(self):
+        EntityManagerABC.__init__(self)
+        TodoistApi.__init__(self, config.TODOIST_API_TOKEN)
+
+    def full_sync(self):
+        return self._get_activity(page_limit=config.EVENTS_SYNC_FULL_SYNC_PAGES)
+
+    def diff_sync(self):
+        pass
+
+    def _get_activity(self, page_limit=1, request_limit=100) -> List:
         logger.debug('Called' + inspect.currentframe().f_code.co_name + ', params: ' + str(locals()))
 
         # This is dumb! requests.get does not work! But curl does.
@@ -69,7 +189,7 @@ class EventManager(EntityManagerABC):
 
     @staticmethod
     def _get_last_event_for_object_by_type(events: List) -> Dict:
-        # TODO is it used?
+        # FixMe is this being used?
 
         events_sorted_by_date = sorted(events, key=itemgetter('event_date'), reverse=True)
 
@@ -85,15 +205,12 @@ class EventManager(EntityManagerABC):
 
         return events_by_type
 
-    @staticmethod
-    def _filter_new_events(events: List) -> List:
+    def _filter_new_events(self, events: List) -> List:
 
-        last_event_datetime_db = DBWorker.select('select event_datetime from events '
-                                                 'order by event_datetime desc limit 1', fetch='one')
-        if not last_event_datetime_db:
+        last_event_datetime = self._get_last_known_event_dt()
+
+        if last_event_datetime is None:
             return events
-
-        last_event_datetime = last_event_datetime_db[0]
 
         res = []
 
@@ -114,11 +231,11 @@ class EventManager(EntityManagerABC):
         response = os.popen(request)
         return json.loads(response.read())
 
-class TaskManager(EntityManager):
-    def __init__(self, api_token):
-        super().__init__(api_token)
+    @staticmethod
+    def _get_last_known_event_dt():
+        last_event_datetime_db = DBWorker.select('select event_datetime from events '
+                                                 'order by event_datetime desc limit 1', fetch='one')
+        if not last_event_datetime_db:
+            return None
 
-
-class ProjectManager(EntityManager):
-    def __init__(self, api_token):
-        super().__init__(api_token)
+        return last_event_datetime_db[0]

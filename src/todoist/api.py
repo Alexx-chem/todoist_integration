@@ -59,16 +59,6 @@ class TodoistApi:
         self.labels = self._sync_labels()
         self.events = self._sync_events()
 
-
-
-
-
-
-
-
-
-
-
     def sync_all_objects(self):
         logger.debug("sync_all_objects")
 
@@ -168,10 +158,6 @@ class TodoistApi:
         except requests.exceptions.ConnectionError:
             logger.error('Connection to Telegram Bot Core was unsuccessful')
 
-    @staticmethod
-    def _to_dict_by_id(lst: Iterable):
-        return {obj.id: obj for obj in lst}
-
     def _get_subtasks(self, task: ExtendedTask):
         return [self.tasks[sub] for sub in self.tasks if self.tasks[sub].parent_id == task.id]
 
@@ -210,52 +196,6 @@ class TodoistApi:
                 out[project.name].append(goal)
 
         return out
-
-    def _sync_todo_tasks(self) -> Dict:
-        logger.debug(inspect.currentframe().f_code.co_name)
-        try:
-            return self._to_dict_by_id(self._extend_tasks(self.rest_api.get_tasks()))
-        except requests.exceptions.ConnectionError as e:
-            logger.error(f'Sync error. {e}')
-            return self.tasks
-
-    def _sync_done_tasks_by_project(self, project_id: str) -> List:
-        logger.debug(inspect.currentframe().f_code.co_name)
-        try:
-            return self.sync_api.items_archive.for_project(project_id).items()
-        except requests.exceptions.ConnectionError as e:
-            logger.error(f'Sync error. {e}')
-            return []
-
-    def _sync_projects(self) -> Dict:
-        logger.debug(inspect.currentframe().f_code.co_name)
-        try:
-            return self._to_dict_by_id(self.rest_api.get_projects())
-        except requests.exceptions.ConnectionError as e:
-            logger.error(f'Sync error. {e}')
-            return self.projects
-
-    def _sync_labels(self) -> Dict:
-        logger.debug(inspect.currentframe().f_code.co_name)
-        try:
-            return self._to_dict_by_id(self.rest_api.get_labels())
-        except requests.exceptions.ConnectionError as e:
-            logger.error(f'Sync error. {e}')
-            return self.labels
-
-    def _sync_done_tasks(self, projects: List) -> Dict:
-        # Heavy operation, avoid to use
-        logger.debug(inspect.currentframe().f_code.co_name)
-        done_tasks = []
-        for project_id in projects:
-            done_tasks.extend([ExtendedTask(task.data) for task in self._sync_done_tasks_by_project(project_id)])
-            sleep(5)
-
-        return self._to_dict_by_id(done_tasks)
-
-    @staticmethod
-    def _extend_tasks(tasks: Iterable[Task]) -> List[ExtendedTask]:
-        return [ExtendedTask(task) for task in tasks]
 
     def _get_tasks_diff(self, tasks_dict: Dict, tasks_ids: Iterable) -> Set:
         res = set()

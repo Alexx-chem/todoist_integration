@@ -6,7 +6,7 @@ import config
 
 from db_worker import DBWorker
 
-DBWorker.set_config(config.db_config)
+DBWorker.set_config(config.DB_CONFIG)
 
 
 def threaded(fn):

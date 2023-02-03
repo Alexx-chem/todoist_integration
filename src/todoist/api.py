@@ -1,7 +1,4 @@
 import joblib
-import json
-import os
-from operator import itemgetter
 import inspect
 from todoist_api_python.api import TodoistAPI as Rest_API, Task  # , Project, Label
 from todoist.api import TodoistAPI as Sync_API
@@ -10,39 +7,24 @@ from typing import Callable, Iterable, List, Dict, Set
 import requests
 from time import sleep
 
-import config
-
 from db_worker import DBWorker
 
 from src.todoist.extended_task import ExtendedTask
 from src.todoist.planner import Planner
-from src.functions import set_db_timezone
+
 from src.logger import get_logger
+import config
 
 
 logger = get_logger(__name__, 'console', config.GLOBAL_LOG_LEVEL)
 
 
 class TodoistApi:
-
-    OBJECTS_COLLECTION_NAMES = ['tasks',
-                                'projects',
-                                'sections',
-                                'labels',
-                                'events']
-
-    def __init__(self, todoist_api_token):
+    def __init__(self, api_token):
         logger.debug("TodoistApi init")
-        self.rest_api = Rest_API(todoist_api_token)
-        self.sync_api = Sync_API(todoist_api_token, api_version=config.TODOIST_API_VERSION)
-        self.token = todoist_api_token
-
-        for collection in self.OBJECTS_COLLECTION_NAMES:
-            vars(self)[collection] = None
-
-        self.planner = Planner(self)
-
-        set_db_timezone()
+        self.rest_api = Rest_API(api_token)
+        self.sync_api = Sync_API(api_token, api_version=config.TODOIST_API_VERSION)
+        self.token = api_token
 
     def run(self):
         try:
@@ -76,6 +58,16 @@ class TodoistApi:
         self.projects = self._sync_projects()
         self.labels = self._sync_labels()
         self.events = self._sync_events()
+
+
+
+
+
+
+
+
+
+
 
     def sync_all_objects(self):
         logger.debug("sync_all_objects")
@@ -260,63 +252,6 @@ class TodoistApi:
             sleep(5)
 
         return self._to_dict_by_id(done_tasks)
-
-    def _sync_events(self, page_limit=1, request_limit=100) -> Dict:
-        logger.debug(inspect.currentframe().f_code.co_name)
-        # This is dumb! requests.get does not work! But curl does.
-        # request_limit=100 is the max value for one page.
-
-        events = []
-
-        page = 0
-        while page <= page_limit:
-            offset_step = 0
-
-            while True:
-                activity = self._get_activity_page(request_limit, offset_step*request_limit, page)
-                try:
-                    events.extend(activity['events'])
-                    print('page =', page, 'offset =', offset_step*request_limit)
-                except KeyError:
-                    print(activity)
-
-                total_in_page = activity['count']
-                max_offset_steps = total_in_page // request_limit
-
-                if max_offset_steps == offset_step:
-                    break
-
-                offset_step += 1
-            page += 1
-
-        all_events_sorted_by_date = sorted(events, key=itemgetter('event_date'), reverse=True)
-
-        res = defaultdict(dict)
-        seen = set()
-
-        for event in all_events_sorted_by_date:
-            event['is_completed'] = event['event_type'] == 'completed'
-            event['is_deleted'] = event['event_type'] == 'deleted'
-            if event['object_id'] not in seen:
-                res[event['event_type']][event['object_id']] = event
-                seen.add(event['object_id'])
-
-        # Getting events diff, to not process already processed events
-        for event_type in res:
-            # TODO неправильно сделал, на первый раз все старые удаляются, и потом все, что прилетели -- как новые
-            res[event_type] = {k: v for k, v in res[event_type].items()
-                               if k not in self.events[event_type]
-                               or v != self.events[event_type][k]}
-
-        return res
-
-    def _get_activity_page(self, limit, offset, page):
-        request = f'curl -s https://api.todoist.com/sync/{config.TODOIST_API_VERSION}/activity/get/ ' \
-                  f'-H "Authorization: Bearer {self.token}" '
-        request += f'-d page={page} -d limit={limit} -d offset={offset} '
-        print(request)
-        response = os.popen(request)
-        return json.loads(response.read())
 
     @staticmethod
     def _extend_tasks(tasks: Iterable[Task]) -> List[ExtendedTask]:

@@ -12,7 +12,7 @@ from src.logger import get_logger
 
 logger = get_logger(__name__, 'console', config.GLOBAL_LOG_LEVEL)
 
-DBWorker.set_config(config.db_config)
+DBWorker.set_config(config.DB_CONFIG)
 
 
 class Planner:
@@ -28,7 +28,7 @@ class Planner:
 
         reports = {}
 
-        for horizon in config.horizons.keys():
+        for horizon in config.PLAN_HORIZONS.keys():
 
             try:
                 plan = Plan.get_active_by_horizon(horizon=horizon)
@@ -115,7 +115,7 @@ class Plan:
         self.tasks = self.get_tasks_from_db()
         self.stats = self.get_tasks_stats()
 
-        self.task_attrs = config.horizons[self.horizon]
+        self.task_attrs = config.PLAN_HORIZONS[self.horizon]
 
     def process_task(self, task: ExtendedTask, action: str) -> bool:
 

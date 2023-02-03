@@ -5,36 +5,42 @@ GLOBAL_LOG_LEVEL = 'DEBUG'
 ALEXX_TODOIST_ID = '***REMOVED***'
 headers = {'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.141 Safari/537.36',
            'cookie': '***REMOVED***'}
-TODOIST_TOKEN = ''***REMOVED***''
+TODOIST_API_TOKEN = ''***REMOVED***''
 TODOIST_API_VERSION = 'v9'
 
 # TG config
-BOT_TOKEN = ''***REMOVED***''
+TG_BOT_TOKEN = ''***REMOVED***''
 ALEXX_TG_CHAT_ID = '***REMOVED***'
 
 # DB config
-db_config = {'dbhost': 'localhost',
+DB_CONFIG = {'dbhost': 'localhost',
              'dbuser': 'postgres',
              'dbpass': '***REMOVED***',
              'dbname': 'todoist',
              'dbport': 5432}
 
-# Todoist planner config
+# Todoist workflow config
 
-TODOIST_SYNC_TIMEOUT_SECONDS = 600
+TODOIST_SYNC_TIMEOUT = 600  # seconds
 
 TODOIST_DATE_FORMAT = '%Y-%m-%d'
+TODOIST_DATETIME_FORMAT = '%Y-%m-%dT%H:%M:%S:%fZ'
 
-GOAL_LABEL_NAME = "Цель"
-SUCCESS_LABEL_NAME = "Успех"
+SPECIAL_LABELS = {'GOAL_LABEL_NAME': "Цель",
+                  'SUCCESS_LABEL_NAME': "Успех"}
 
+ENTITY_TYPES = ['tasks',
+                'projects',
+                'sections',
+                'labels',
+                'events']
 
-horizons = {
+PLAN_HORIZONS = {
     'day': {'due_date': None},
     'week': {'due_date': None},
     'month': {'label': "Месяц"},
     'quarter': {'label': "Месяц"},
-    'year': {'label': GOAL_LABEL_NAME,
+    'year': {'label': SPECIAL_LABELS['GOAL_LABEL_NAME'],
              'priority':  4}
 }
 

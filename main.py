@@ -8,7 +8,7 @@ from src import JobManager
 if __name__ == '__main__':
     job_manager = JobManager()
 
-    todoist_api = TodoistApi(config.TODOIST_TOKEN)
+    todoist_api = TodoistApi(config.TODOIST_API_TOKEN)
     todoist_api.run()
 
     # Указывать время в том часовом поясе, в котором код будет работать!
@@ -19,4 +19,4 @@ if __name__ == '__main__':
 
     while True:
         sleep(config.TODOIST_SYNC_TIMEOUT_SECONDS)
-        todoist_api.sync_all_objects()
+        #todoist_api.sync_all_objects()

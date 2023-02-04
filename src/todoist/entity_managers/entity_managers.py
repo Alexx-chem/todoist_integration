@@ -1,4 +1,4 @@
-from typing import List, Dict  # , Callable, Iterable, Set
+from typing import List, Dict
 from requests.exceptions import ConnectionError
 from collections import defaultdict
 from operator import itemgetter
@@ -20,7 +20,7 @@ import config
 logger = get_logger(__name__, 'console', config.GLOBAL_LOG_LEVEL)
 
 
-class EntityManager(EntityManagerABC):
+class Synchronizer:
 
     def __init__(self, localize_db_timezone=True):
         super(EntityManagerABC).__init__()
@@ -34,38 +34,13 @@ class EntityManager(EntityManagerABC):
 
     def full_sync(self, db_save_mode: str = 'soft'):
         for entity_name in config.ENTITIES:
-            logger.debug(f'{entity_name}: full_sync')
-            entity_array = []
             try:
-                entity_array = vars(self)[f'{entity_name}_manager'].full_sync()
+                vars(self)[f'{entity_name}_manager'].full_sync(db_save_mode=db_save_mode)
             except ConnectionError as e:
                 logger.error(f'Sync error. {e}')
 
-            self._save_entity_to_db(entity_array, entity_name, db_save_mode)
-
     def diff_sync(self):
         pass
-
-    def _save_entity_to_db(self, entity_array, entity_name, db_save_mode):
-        if db_save_mode == 'hard':
-            DBWorker.input(f'delete from {entity_name}')
-
-        elif db_save_mode == 'soft':
-            existing_ids = DBWorker.select(f'select id from {entity_name}')
-
-    @staticmethod
-    def _prepare_values(entity_array, entity_name):
-        entity_type = config.ENTITIES[entity_name]['type']
-        db_fields = config.ENTITIES[entity_name]['db_fields']
-
-        values = [()]
-
-        # TODO Reminders:
-        # unnest method is COLUMN-based approach!
-        # https://trvrm.github.io/bulk-psycopg2-inserts.html
-
-        # raw_data = entity.__dict__ if entity_type == 'class'
-        # raw_data = entity if entity_type == 'dict'
 
 
 def get_manager(entity_name):
@@ -84,7 +59,7 @@ def get_manager(entity_name):
 
 class TasksManager(EntityManagerABC, TodoistApi):
     def __init__(self):
-        EntityManagerABC.__init__(self)
+        EntityManagerABC.__init__(self, 'tasks')
         TodoistApi.__init__(self, config.TODOIST_API_TOKEN)
 
     def full_sync(self):
@@ -114,7 +89,7 @@ class TasksManager(EntityManagerABC, TodoistApi):
 
 class ProjectsManager(EntityManagerABC, TodoistApi):
     def __init__(self):
-        EntityManagerABC.__init__(self)
+        EntityManagerABC.__init__(self, 'projects')
         TodoistApi.__init__(self, config.TODOIST_API_TOKEN)
 
     def full_sync(self):
@@ -126,7 +101,7 @@ class ProjectsManager(EntityManagerABC, TodoistApi):
 
 class SectionsManager(EntityManagerABC, TodoistApi):
     def __init__(self):
-        EntityManagerABC.__init__(self)
+        EntityManagerABC.__init__(self, 'sections')
         TodoistApi.__init__(self, config.TODOIST_API_TOKEN)
 
     def full_sync(self):
@@ -138,7 +113,7 @@ class SectionsManager(EntityManagerABC, TodoistApi):
 
 class LabelsManager(EntityManagerABC, TodoistApi):
     def __init__(self):
-        EntityManagerABC.__init__(self)
+        EntityManagerABC.__init__(self, 'labels')
         TodoistApi.__init__(self, config.TODOIST_API_TOKEN)
 
     def full_sync(self):
@@ -150,7 +125,7 @@ class LabelsManager(EntityManagerABC, TodoistApi):
 
 class EventsManager(EntityManagerABC, TodoistApi):
     def __init__(self):
-        EntityManagerABC.__init__(self)
+        EntityManagerABC.__init__(self, 'events')
         TodoistApi.__init__(self, config.TODOIST_API_TOKEN)
 
     def full_sync(self):

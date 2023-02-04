@@ -75,3 +75,12 @@ def set_db_timezone(utcoffset: str = None):
         utcoffset = datetime.now().astimezone().tzinfo.utcoffset(None).seconds // 3600
 
     DBWorker.input(f"SET timezone TO {utcoffset}")
+
+
+def get_chained_attr(class_obj, attr_chain):
+
+    if len(attr_chain) == 0:
+        return class_obj
+
+    obj = class_obj.__dict__[attr_chain.pop(0)]
+    return get_chained_attr(obj, attr_chain)

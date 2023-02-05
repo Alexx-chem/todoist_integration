@@ -10,7 +10,7 @@ log_levels = {'error': logging.ERROR,
 
 def get_logger(logger_name, logger_type, logging_level='info',  **kwargs):
 
-    log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    log_format = '%(asctime)s - %(levelname)s - %(name)s - %(message)s'
     logger = logging.getLogger(logger_name)
 
     logger.setLevel(log_levels[logging_level.lower()])

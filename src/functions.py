@@ -1,4 +1,5 @@
 from datetime import datetime, date, timedelta
+from typing import Union, Dict
 from threading import Thread
 import traceback
 
@@ -84,3 +85,39 @@ def get_chained_attr(class_obj, attr_chain):
 
     obj = class_obj.__dict__[attr_chain.pop(0)]
     return get_chained_attr(obj, attr_chain)
+
+
+def convert_dt(dt: Union[datetime, date, str], str_type='datetime'):
+    if isinstance(dt, datetime):
+        return dt.strftime(config.TODOIST_DATETIME_FORMAT)
+
+    if isinstance(dt, date):
+        return dt.strftime(config.TODOIST_DATE_FORMAT)
+
+    if isinstance(dt, str):
+        if str_type == 'datetime':
+            return datetime.strptime(dt, config.TODOIST_DATETIME_FORMAT)
+
+        if str_type == 'date':
+            return datetime.strptime(dt, config.TODOIST_DATE_FORMAT)
+
+
+def get_items_set_operation(left: Dict, right: Dict, op: str) -> Dict:
+    assert op in ('intersection', 'union', 'current_difference', 'synced_difference'), f'Unknown op value: {op}'
+
+    ids_subset = set()
+
+    if op == 'intersection':
+        ids_subset = left.keys() & right.keys()
+
+    if op == 'union':
+        ids_subset = left.keys() | right.keys()
+
+    if op == 'current_difference':
+        ids_subset = left.keys() - right.keys()
+
+    if op == 'synced_difference':
+        ids_subset = right.keys() - left.keys()
+
+    return {_id: {'left': left[_id],
+                  'right': right[_id]} for _id in ids_subset}

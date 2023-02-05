@@ -72,12 +72,11 @@ PLAN_HORIZONS = {
              'priority':  4}
 }
 
-task_actions = ['created',
-                'modified',
-                'completed',
-                'uncompleted',
-                'deleted',
-                'loaded']
+EVENT_TYPES = ['added',
+               'modified',
+               'completed',
+               'uncompleted',
+               'deleted']
 
 status_transitions = {
     'new': ('planned', ),

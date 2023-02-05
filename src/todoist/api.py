@@ -78,48 +78,7 @@ class TodoistApi:
 
     def _process_scope_diff(self, scope):
 
-        task_to_action_map = []
 
-        # Completed tasks
-        completed_task_ids = self.tasks.keys() & scope['events']['completed'].keys()
-        logger.debug(f'completed_task_ids {completed_task_ids}')
-        task_to_action_map.extend([(task_id, 'completed') for task_id in completed_task_ids])
-
-        # Deleted tasks
-        deleted_task_ids = (self.tasks.keys() - scope['tasks'].keys()) & scope['events']['deleted'].keys()
-        logger.debug(f'deleted_task_ids {deleted_task_ids}')
-        task_to_action_map.extend([(task_id, 'deleted') for task_id in deleted_task_ids])
-
-        # Tasks present only in synced scope, not in local
-        new_and_uncompleted_task_ids = scope['tasks'].keys() - self.tasks.keys()
-
-        # Newly created tasks
-        new_task_ids = new_and_uncompleted_task_ids & scope['events']['added'].keys()
-        logger.debug(f'new_task_ids {new_task_ids}')
-        task_to_action_map.extend([(task_id, 'created') for task_id in new_task_ids])
-
-        # Uncompleted tasks
-        uncompleted_task_ids = new_and_uncompleted_task_ids & scope['events']['uncompleted'].keys()
-        logger.debug(f'uncompleted_task_ids {uncompleted_task_ids}')
-        task_to_action_map.extend([(task_id, 'uncompleted') for task_id in uncompleted_task_ids])
-
-        # Tasks, present in both synced and local scopes
-        common_task_ids = scope['tasks'].keys() & self.tasks.keys()  # Tasks present both in local and synced scopes
-
-        # Tasks, modified in comparison
-        modified_tasks = self._get_tasks_diff(scope, common_task_ids)
-        logger.debug(f'modified_tasks: {modified_tasks}')
-
-        task_to_action_map.extend([(task_id, 'modified') for task_id in modified_tasks])
-
-        for task_id, action in task_to_action_map:
-
-            if action in ("completed", "deleted"):
-                task = self.tasks[task_id]
-            else:
-                task = scope['tasks'][task_id]
-
-            self.planner.process_task(task, action)
 
     def refresh_plans(self):
         reports = self.planner.refresh_plans()
@@ -196,27 +155,3 @@ class TodoistApi:
                 out[project.name].append(goal)
 
         return out
-
-    def _get_tasks_diff(self, tasks_dict: Dict, tasks_ids: Iterable) -> Set:
-        res = set()
-        for task_id in tasks_ids:
-            for property_key in vars(self.tasks[task_id]):
-                old_property_value = vars(self.tasks[task_id])[property_key]
-                new_property_value = vars(tasks_dict['tasks'][task_id])[property_key]
-                if old_property_value != new_property_value:
-                    if property_key == 'due':
-                        if self._due_same_except_string(old_property_value, new_property_value):
-                            logger.debug(f'due.string changed: {self.tasks[task_id].content}')
-                            continue
-
-                    res.add(task_id)
-        return res
-
-    @staticmethod
-    def _due_same_except_string(task_due_1, task_due_2) -> bool:
-        # Patch. Field 'due.string' is changing at the server side at midnight!
-        if None not in (task_due_1, task_due_2):
-            return all([vars(task_due_1)[key] == vars(task_due_2)[key]
-                        for key in vars(task_due_1) if key != 'string'])
-
-        return False

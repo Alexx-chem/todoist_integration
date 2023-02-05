@@ -18,5 +18,5 @@ if __name__ == '__main__':
     job_manager.get_task_state()
 
     while True:
-        sleep(config.TODOIST_SYNC_TIMEOUT_SECONDS)
-        #todoist_api.sync_all_objects()
+        sleep(config.TODOIST_SYNC_TIMEOUT)
+        # todoist_api.sync_all_objects()

@@ -1,17 +1,32 @@
 from typing import Iterable, List, Dict, Union
+from todoist_api_python.api import Task
 from time import sleep
 
-from .entity_manager_abc import EntityManagerABC
+from .entity_manager import AbstractEntityManager
 from src.todoist import ExtendedTask
 
 
-class TasksManager(EntityManagerABC):
+class TasksManager(AbstractEntityManager):
+
+    _entity_name = 'tasks'
+    _entity_type = ExtendedTask
 
     def __init__(self):
-        EntityManagerABC.__init__(self, 'tasks')
+        AbstractEntityManager.__init__(self)
 
-    def _get_raw_items_from_api(self):
-        return self.rest_api.get_tasks()
+    def _get_items_from_api(self):
+        return self._to_dict_by_id(self._extend_tasks(self.rest_api.get_tasks()))
+
+    def _get_item_from_api(self, _id) -> Dict[str, _entity_type]:
+        ext_task = self._extend_task(self.rest_api.get_task(task_id=_id))
+        return {ext_task.id: ext_task}
+
+    def _extend_tasks(self, tasks: Iterable[Task]) -> List[_entity_type]:
+        return [self._extend_task(task) for task in tasks]
+
+    @staticmethod
+    def _extend_task(task: Task) -> _entity_type:
+        return ExtendedTask(task)
 
     def get_filtered_new_items(self, *args, **kwargs):
         pass
@@ -26,7 +41,7 @@ class TasksManager(EntityManagerABC):
             done_tasks.extend([ExtendedTask(task.data) for task in self._sync_done_tasks_by_project(project_id)])
             sleep(5)  # in order to prevent DoS, better rework!
 
-        return self._objects_to_dict_by_id(done_tasks)
+        return self._to_dict_by_id(done_tasks)
 
     def _sync_done_tasks_by_project(self, project_id: str) -> List:
         try:
@@ -44,12 +59,14 @@ class TasksManager(EntityManagerABC):
 
         return False
 
-    @property
-    def updated_diff(self):
-        updated = super().updated_diff
-        for task_id in updated:
+    def get_task_diff_by_id(self, task_id: str) -> Dict:
+        current_task = self.get_current_item_by_id(task_id)
+        synced_task = self.get_synced_item_by_id(task_id)
 
-            if property_key == 'due':
-                if self._due_same_except_string(old_property_value, new_property_value):
-                    self.logger.debug(f'due.string changed: {self.tasks[task_id].content}')
-                    continue
+        for attr in Task.__dict__:
+            pass  # TODO!!111
+
+    def _get_subtasks(self, task: ExtendedTask):
+        return [self._current_items[sub]
+                for sub in self._current_items
+                if self._current_items[sub].parent_id == task.id]

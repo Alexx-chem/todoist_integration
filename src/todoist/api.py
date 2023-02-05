@@ -1,16 +1,8 @@
-import joblib
-import inspect
-from todoist_api_python.api import TodoistAPI as Rest_API, Task  # , Project, Label
+from todoist_api_python.api import TodoistAPI as Rest_API
 from todoist.api import TodoistAPI as Sync_API
 from collections import defaultdict
-from typing import Callable, Iterable, List, Dict, Set
+from typing import Callable
 import requests
-from time import sleep
-
-from db_worker import DBWorker
-
-from src.todoist.extended_task import ExtendedTask
-from src.todoist.planner import Planner
 
 from src.logger import get_logger
 import config
@@ -25,60 +17,6 @@ class TodoistApi:
         self.rest_api = Rest_API(api_token)
         self.sync_api = Sync_API(api_token, api_version=config.TODOIST_API_VERSION)
         self.token = api_token
-
-    def run(self):
-        try:
-            logger.debug("Loading objects")
-            self._load_all_objects()
-
-        except (FileNotFoundError, Exception) as e:
-            logger.warning(e)
-            self._fill_objects_from_api()
-
-        else:
-            self.sync_all_objects()
-
-        self._save_all_objects_to_file()
-
-    def _save_all_objects_to_file(self):
-        scope = {collection: vars(self)[collection] for collection in self.OBJECTS_COLLECTION_NAMES}
-        joblib.dump(scope, 'todoist_scope')
-
-    def _save_all_objects_to_db(self, target: tuple = ('db',)):
-        scope = {collection: vars(self)[collection] for collection in self.OBJECTS_COLLECTION_NAMES}
-        for collection in self.OBJECTS_COLLECTION_NAMES:
-            DBWorker.input()
-
-    def _load_all_objects(self):
-        scope = joblib.load('todoist_scope')
-        vars(self).update(scope)
-
-    def _fill_objects_from_api(self):
-        self.tasks = self._sync_todo_tasks()
-        self.projects = self._sync_projects()
-        self.labels = self._sync_labels()
-        self.events = self._sync_events()
-
-    def sync_all_objects(self):
-        logger.debug("sync_all_objects")
-
-        tasks = self._sync_todo_tasks()
-        projects = self._sync_projects()
-
-        scope = {
-            'tasks': tasks,
-            'projects': projects,
-            'labels': self._sync_labels(),
-            'events': self._sync_events()
-        }
-
-        self._process_scope_diff(scope)
-        vars(self).update(scope)
-        self._save_all_objects_to_file()
-
-    def _process_scope_diff(self, scope):
-
-
 
     def refresh_plans(self):
         reports = self.planner.refresh_plans()
@@ -117,9 +55,6 @@ class TodoistApi:
         except requests.exceptions.ConnectionError:
             logger.error('Connection to Telegram Bot Core was unsuccessful')
 
-    def _get_subtasks(self, task: ExtendedTask):
-        return [self.tasks[sub] for sub in self.tasks if self.tasks[sub].parent_id == task.id]
-
     @staticmethod
     def _tasks_by_project_to_string(tasks_by_projects_list, header: str):
         out = f'<b>{header}</b>\n\n'
@@ -129,9 +64,6 @@ class TodoistApi:
                 out += f'    \U0001f539 <a href="{goal.url}">{goal.content}</a>\n'
             out += '\n'
         return out
-
-    def _is_task_in_correct_state(self):
-        pass
 
     def _get_goals_with_subtasks(self):
         goals = [self.tasks[task] for task in self.tasks if config.GOAL_LABEL_NAME in self.tasks[task].labels]

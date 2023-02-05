@@ -103,21 +103,15 @@ def convert_dt(dt: Union[datetime, date, str], str_type='datetime'):
 
 
 def get_items_set_operation(left: Dict, right: Dict, op: str) -> Dict:
-    assert op in ('intersection', 'union', 'current_difference', 'synced_difference'), f'Unknown op value: {op}'
+    assert op in ('intersection', 'difference'), f'Unknown op value: {op}'
 
     ids_subset = set()
 
     if op == 'intersection':
         ids_subset = left.keys() & right.keys()
 
-    if op == 'union':
-        ids_subset = left.keys() | right.keys()
-
-    if op == 'current_difference':
+    if op == 'difference':
         ids_subset = left.keys() - right.keys()
-
-    if op == 'synced_difference':
-        ids_subset = right.keys() - left.keys()
 
     return {_id: {'left': left[_id],
                   'right': right[_id]} for _id in ids_subset}

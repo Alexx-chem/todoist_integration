@@ -1,4 +1,4 @@
-from typing import Iterable, List, Dict, Union
+from typing import List, Dict, Union
 from datetime import datetime, timedelta
 from collections import defaultdict
 from operator import itemgetter
@@ -7,25 +7,28 @@ import os
 
 from db_worker import DBWorker
 
-from .entity_manager_abc import EntityManagerABC
-from src.functions import convert_dt
+from .entity_manager import AbstractEntityManager
+from src.todoist.entity_managers import Event
 import config
 
 
-class EventsManager(EntityManagerABC):
+class EventsManager(AbstractEntityManager):
+
+    _entity_name = 'events'
+    _entity_type = Event
 
     def __init__(self):
-        EntityManagerABC.__init__(self, 'events')
+        AbstractEntityManager.__init__(self)
 
-    def _load_items(self, *args, **kwargs):
+    def sync_items(self, *args, **kwargs):
         page_limit = self._get_pages(self._get_last_known_event_dt())
-        super()._load_items(page_limit)
+        super().sync_items(page_limit)
 
-    def _get_raw_items_from_api(self, page_limit, request_limit=100) -> List:
+    def _get_items_from_api(self, page_limit: int, request_limit: int = 100) -> Dict:
 
         # This is dumb! requests.get does not work! But curl does.
         # request_limit=100 is the max value for one page.
-        events = []
+        events_list = []
         page = 0
         while page <= page_limit:
             offset_step = 0
@@ -33,7 +36,7 @@ class EventsManager(EntityManagerABC):
             while True:
                 activity_page = self._get_activity_page(request_limit, offset_step * request_limit, page)
                 try:
-                    events.extend(activity_page['events'])
+                    events_list.extend(activity_page['events'])
                 except KeyError:
                     self.logger.error(f'Failed to get events from activity page object: {activity_page}')
 
@@ -46,30 +49,9 @@ class EventsManager(EntityManagerABC):
 
             page += 1
 
-        return events
+        return self._to_dict_by_id(self.__items_dict_to_obj(events_list))
 
-    def get_filtered_new_items(self, items: List) -> List:
-
-        last_event_dt = self._get_last_known_event_dt()
-
-        if last_event_dt is None:
-            return items
-
-        res = []
-
-        for event in items:
-            if convert_dt(event['event_date']) > last_event_dt:
-                res.append(event)
-
-        return res
-
-    def _process_update(self, items):
-        pass
-
-    def _save_events_to_db(self, events: List):
-        pass
-
-    def _get_activity_page(self, limit, offset, page):
+    def _get_activity_page(self, limit: int, offset: int, page: int) -> Dict:
         request = f'curl -s https://api.todoist.com/sync/{config.TODOIST_API_VERSION}/activity/get/ ' \
                   f'-H "Authorization: Bearer {self.token}" '
         request += f'-d page={page} -d limit={limit} -d offset={offset} '
@@ -114,19 +96,23 @@ class EventsManager(EntityManagerABC):
         return events_by_type
 
     @staticmethod
-    def _get_events_by_type(events: List[Dict]) -> Dict:
+    def _get_events_by_type(events: Dict) -> Dict:
 
-        events_by_type = defaultdict(list)
+        events_by_type = defaultdict(dict)
 
-        for event in events:
-            events_by_type[event['event_type']].append(event)
+        for event_id, event in events.items():
+            events_by_type[event['event_type']][event_id] = event
 
         return events_by_type
 
     @property
-    def current_by_type(self):
+    def current_by_type(self) -> Dict:
         return self._get_events_by_type(self._current_items)
 
     @property
-    def synced_by_type(self):
+    def synced_by_type(self) -> Dict:
         return self._get_events_by_type(self._synced_items)
+
+    @property
+    def new_by_type(self) -> Dict:
+        return self._get_events_by_type(self.new)

@@ -4,6 +4,11 @@ import config
 from src.todoist import Pipeline
 from src import JobManager
 
+from db_worker import DBWorker
+
+
+DBWorker.set_config(config.DB_CONFIG)
+
 
 if __name__ == '__main__':
     job_manager = JobManager()

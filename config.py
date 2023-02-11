@@ -18,7 +18,8 @@ DB_CONFIG = {'dbhost': 'localhost',
              'dbuser': 'postgres',
              'dbpass': '***REMOVED***',
              'dbname': 'todoist',
-             'dbport': 5432}
+             'dbport': 5432,
+             'cursor_factory': 'dict_cursor'}
 
 # Todoist workflow config
 

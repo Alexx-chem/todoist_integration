@@ -5,14 +5,12 @@ import inspect
 from db_worker import DBWorker
 
 from src.functions import get_today, horizon_to_date
-from .extended_task import ExtendedTask
+from src.todoist.entity_classes.extended_task import ExtendedTask
 import config
 from src.logger import get_logger
 
 
 logger = get_logger(__name__, 'console', config.GLOBAL_LOG_LEVEL)
-
-DBWorker.set_config(config.DB_CONFIG)
 
 
 class Planner:
@@ -206,11 +204,11 @@ class Plan:
         if len(plan_db) > 1:
             raise ValueError(f'There are {len(plan_db)} active plans for this {horizon} in the DB')
 
-        plan_id = plan_db[0][0]
-        horizon = plan_db[0][1]
-        active = plan_db[0][2]
-        start = plan_db[0][3]
-        end = plan_db[0][4]
+        plan_id = plan_db[0]['id']
+        horizon = plan_db[0]['horizon']
+        active = plan_db[0]['active']
+        start = plan_db[0]['start_date']
+        end = plan_db[0]['end_date']
 
         plan = Plan(plan_id, horizon, active, start.date(), end.date())
         plan.get_tasks_from_db()
@@ -226,9 +224,9 @@ class Plan:
                                    f"where plan_id = {self.id} "
                                    f"order by task_id, timestamp")
         for task_row in tasks_db:
-            task_id = task_row[0]
-            status = task_row[1]
-            timestamp = task_row[2]
+            task_id = task_row['task_id']
+            status = task_row['status']
+            timestamp = task_row['timestamp']
             tasks_dict[task_id].append((status, timestamp))
 
         return tasks_dict
@@ -287,7 +285,10 @@ class Plan:
         qty_postponed = self.stats['by_status']['postponed']
         qty_overall_planned = sum((qty_completed, qty_planned, qty_postponed, qty_deleted))
 
-        completion_ratio = (qty_completed / (qty_completed + qty_planned)) * 100
+        try:
+            completion_ratio = (qty_completed / (qty_completed + qty_planned)) * 100
+        except ZeroDivisionError:
+            completion_ratio = 0
 
         report = {'completed': f"{qty_completed} completed tasks",
                   'not_completed': f"{qty_planned} not completed planned tasks",
@@ -303,4 +304,4 @@ class Plan:
 
     @classmethod
     def set_inactive_by_horizon(cls, horizon):
-        DBWorker.input(f"update plans set active = false where horizon = {horizon}")
+        DBWorker.input(f"update plans set active = false where horizon = '{horizon}'")

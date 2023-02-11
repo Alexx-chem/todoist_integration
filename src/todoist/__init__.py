@@ -1,3 +1,3 @@
 from .api import TodoistApi
-from .extended_task import ExtendedTask
+from src.todoist.entity_classes import ExtendedTask, Event
 from .pipeline import Pipeline

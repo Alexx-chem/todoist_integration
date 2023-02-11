@@ -1,20 +1,22 @@
-from typing import List, Dict, Union
+from typing import Dict, Union
 from datetime import datetime, timedelta
 from collections import defaultdict
-from operator import itemgetter
 import json
 import os
 
 from db_worker import DBWorker
 
-from .entity_manager_abs import AbstractEntityManager, Event
+from .entity_manager_abs import AbstractEntityManager
+from src.todoist.entity_classes import Event
+from . import ENTITY_CONFIG
 import config
 
 
 class EventsManager(AbstractEntityManager):
 
     _entity_name = 'events'
-    _entity_type = Event
+    _entity_type = ENTITY_CONFIG[_entity_name]['entity_type']
+    _attrs = ENTITY_CONFIG[_entity_name]['attrs'].keys()
 
     def __init__(self):
         AbstractEntityManager.__init__(self)

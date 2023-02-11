@@ -1,8 +1,10 @@
-from src.todoist.entity_managers import ENTITY_TO_CLASS
+from requests.exceptions import ConnectionError
+
+
+from src.todoist.entity_managers import ENTITY_CONFIG
 from src.todoist.planner import Planner
 from src.functions import set_db_timezone, send_message_via_bot
 from src.logger import get_logger
-
 
 import config
 
@@ -16,14 +18,15 @@ class Pipeline:
         self.managers = self._get_managers()
 
         self.planner = Planner()
-        self.planner.refresh_plans(self._get_current_entity_scope('tasks'))
+        self.refresh_plans(self._get_current_entity_scope('tasks'))
 
         if localize_db_timezone:
             set_db_timezone()
 
     @staticmethod
     def _get_managers():
-        return {entity: ENTITY_TO_CLASS[entity]() for entity in ENTITY_TO_CLASS}
+        # FIXME Ух грязные хаки! Наверное, надо выпилить этот разврат
+        return {entity: eval(ENTITY_CONFIG[entity]['manager_class_name'])() for entity in ENTITY_CONFIG}
 
     def _get_current_entity_scope(self, entity_type):
         self.managers[entity_type].load_items()
@@ -33,14 +36,18 @@ class Pipeline:
         self.managers[entity_type].sync_items()
         return self.managers[entity_type].synced
 
-    def refresh_plans(self):
-        reports = self.planner.refresh_plans(self._get_current_entity_scope('tasks'))
+    def refresh_plans(self, current_tasks):
+        reports = self.planner.refresh_plans(current_tasks)
         delete_previous = True
         for horizon in reports:
             report_text = self._format_report(reports[horizon], horizon)
             self.logger.info(report_text)
-            send_message_via_bot(report_text, delete_previous=delete_previous)
-            delete_previous = False
+            self.logger.info('Sending message via bot')
+            try:
+                response = send_message_via_bot(report_text, delete_previous=delete_previous)
+                self.logger.info(f'Message sent, response code: {response.status_code}')
+            except ConnectionError as e:
+                self.logger.error(f'Failed to send a message via bot: {e}')
 
     @staticmethod
     def _format_report(report, horizon, html=True):

@@ -1,12 +1,14 @@
 from typing import Dict
 
-from .entity_manager_abs import AbstractEntityManager, Project
+from .entity_manager_abs import AbstractEntityManager
+from . import ENTITY_CONFIG
 
 
 class ProjectsManager(AbstractEntityManager):
 
     _entity_name = 'projects'
-    _entity_type = Project
+    _entity_type = ENTITY_CONFIG[_entity_name]['entity_type']
+    _attrs = ENTITY_CONFIG[_entity_name]['attrs'].keys()
 
     def __init__(self):
         AbstractEntityManager.__init__(self)
@@ -17,5 +19,5 @@ class ProjectsManager(AbstractEntityManager):
     def _get_item_from_api(self, _id: str) -> Dict:
         return super()._get_item_from_api(_id=_id)
 
-    def _get_items_from_api(self):
+    def _get_items_from_api(self, *args, **kwargs):
         return self.rest_api.get_projects()

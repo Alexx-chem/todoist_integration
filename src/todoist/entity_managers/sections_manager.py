@@ -1,12 +1,14 @@
 from typing import Dict
 
-from .entity_manager_abs import AbstractEntityManager, Section
+from .entity_manager_abs import AbstractEntityManager
+from . import ENTITY_CONFIG
 
 
 class SectionsManager(AbstractEntityManager):
 
     _entity_name = 'sections'
-    _entity_type = Section
+    _entity_type = ENTITY_CONFIG[_entity_name]['entity_type']
+    _attrs = ENTITY_CONFIG[_entity_name]['attrs'].keys()
 
     def __init__(self):
         AbstractEntityManager.__init__(self)
@@ -14,8 +16,8 @@ class SectionsManager(AbstractEntityManager):
     def load_items(self, *args, **kwargs):
         return super().load_items(*args, **kwargs)
 
-    def _get_items_from_api(self):
-        return self.rest_api.get_sections()
-
     def _get_item_from_api(self, _id: str) -> Dict:
         return super()._get_item_from_api(_id=_id)
+
+    def _get_items_from_api(self, *args, **kwargs):
+        return self.rest_api.get_sections()

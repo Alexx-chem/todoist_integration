@@ -124,9 +124,6 @@ def send_message_via_bot(text, delete_previous=False, save_msg_to_db=True):
     request += f'&text={text}'
     request += f'&delete_previous=true' if delete_previous else ''
     request += f'&save_msg_to_db=true' if save_msg_to_db else ''
-    try:
-        requests.post(request)
-    except requests.exceptions.ConnectionError:
-        return False
 
-    return True
+    return requests.post(request)
+

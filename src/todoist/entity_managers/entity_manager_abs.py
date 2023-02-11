@@ -4,53 +4,22 @@ import inspect
 
 from db_worker import DBWorker
 
-from todoist_api_python.api import Task, Project, Section, Label
-from .todoist_event import Event
 from src.functions import get_chained_attr, get_items_set_operation
 from src.todoist.api import TodoistApi
 from src.logger import get_logger
+from . import ENTITY_ITEMS_TYPING
 
 import config
 
 
-ENTITIES_ATTRS = {'tasks': ['id',
-                            'due.date',
-                            'due.datetime',
-                            'priority',
-                            'content',
-                            'project_id',
-                            'labels',
-                            'is_completed',
-                            'is_deleted',
-                            'is_recurring',
-                            'parent_id'],
-                  'projects': ['id',
-                               'name',
-                               'parent_id',
-                               'is_inbox_project'],
-                  'sections': ['id',
-                               'name',
-                               'project_id'],
-                  'labels': ['id',
-                             'name'],
-                  'events': ['id',
-                             'object_type',
-                             'event_type',
-                             'object_id',
-                             'event_date']}
-
-_ENTITY_ITEMS_TYPING = Union[Task, Project, Section, Label, Event]
-
-
 class AbstractEntityManager(ABC, TodoistApi):
     _entity_name: Union[str, None] = None
-    _entity_type: Union[_ENTITY_ITEMS_TYPING, None] = None
+    _entity_type: Union[ENTITY_ITEMS_TYPING, None] = None
+    _attrs: Union[List, None] = None
 
     def __init__(self):
         TodoistApi.__init__(self, config.TODOIST_API_TOKEN)
         self.logger = get_logger(self.__class__.__name__, 'console', config.GLOBAL_LOG_LEVEL)
-
-        self._attrs = ENTITIES_ATTRS[self._entity_name]
 
         self._current_items: Union[Dict, None] = None
         self._synced_items: Union[Dict, None] = None
@@ -88,7 +57,10 @@ class AbstractEntityManager(ABC, TodoistApi):
 
     def _get_items_from_db(self) -> Dict:
         joiner = '", "'
-        items = DBWorker.select(f'select "{joiner.join(self._attrs)}" from {self._entity_name}')
+        query = f'select "{joiner.join(self._attrs)}" from {self._entity_name}'
+        print(query)
+        items = query
+        print(items)
         items_list = (self._entity_type.from_dict(dict(zip(self._attrs, row))) for row in items)
         return self._to_dict_by_id(items_list)
 
@@ -117,7 +89,7 @@ class AbstractEntityManager(ABC, TodoistApi):
 
         DBWorker.input(query, data=values)
 
-    def _prepare_values(self, items: Dict[str, _ENTITY_ITEMS_TYPING]) -> Dict:
+    def _prepare_values(self, items: Dict[str, ENTITY_ITEMS_TYPING]) -> Dict:
         """
         Transforms
         :param items: list of objects of one of types from _items_typing
@@ -132,7 +104,7 @@ class AbstractEntityManager(ABC, TodoistApi):
                         zip(*vals)))
 
     @staticmethod
-    def _to_dict_by_id(items: Iterable[_ENTITY_ITEMS_TYPING]) -> Dict:
+    def _to_dict_by_id(items: Iterable[ENTITY_ITEMS_TYPING]) -> Dict:
         return {obj.id: obj for obj in items}
 
     @property
@@ -207,10 +179,10 @@ class AbstractEntityManager(ABC, TodoistApi):
                                            right=current,
                                            op=f'difference')
 
-    def get_current_item_by_id(self, item_id: str) -> _ENTITY_ITEMS_TYPING:
+    def get_current_item_by_id(self, item_id: str) -> ENTITY_ITEMS_TYPING:
         return self._current_items[item_id]
 
-    def get_synced_item_by_id(self, item_id: str) -> _ENTITY_ITEMS_TYPING:
+    def get_synced_item_by_id(self, item_id: str) -> ENTITY_ITEMS_TYPING:
         return self._synced_items[item_id]
 
     def __items_dict_to_obj(self, item_dict_list: List[Dict]) -> List:

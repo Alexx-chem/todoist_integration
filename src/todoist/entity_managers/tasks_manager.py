@@ -1,14 +1,17 @@
-from typing import Iterable, List, Dict, Union
+from typing import Iterable, List, Dict
+from todoist_api_python.models import Task
 from time import sleep
 
-from .entity_manager_abs import AbstractEntityManager, Task
+from .entity_manager_abs import AbstractEntityManager
 from src.todoist import ExtendedTask
+from . import ENTITY_CONFIG
 
 
 class TasksManager(AbstractEntityManager):
 
     _entity_name = 'tasks'
-    _entity_type = ExtendedTask
+    _entity_type = ENTITY_CONFIG[_entity_name]['entity_type']
+    _attrs = ENTITY_CONFIG[_entity_name]['attrs'].keys()
 
     def __init__(self):
         AbstractEntityManager.__init__(self)

@@ -1,12 +1,14 @@
 from typing import Dict
 
-from .entity_manager_abs import AbstractEntityManager, Label
+from .entity_manager_abs import AbstractEntityManager
+from . import ENTITY_CONFIG
 
 
 class LabelsManager(AbstractEntityManager):
 
     _entity_name = 'labels'
-    _entity_type = Label
+    _entity_type = ENTITY_CONFIG[_entity_name]['entity_type']
+    _attrs = ENTITY_CONFIG[_entity_name]['attrs'].keys()
 
     def __init__(self):
         AbstractEntityManager.__init__(self)

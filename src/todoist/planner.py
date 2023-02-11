@@ -17,13 +17,11 @@ DBWorker.set_config(config.DB_CONFIG)
 
 class Planner:
 
-    def __init__(self, todoist_api):
+    def __init__(self):
 
         self.plans = {}
-        self.api = todoist_api
-        self.refresh_plans()
 
-    def refresh_plans(self):
+    def refresh_plans(self, tasks):
         today = get_today()
 
         reports = {}
@@ -40,14 +38,14 @@ class Planner:
 
                     plan.set_inactive_by_id()
 
-                    plan = self.create_plan_from_scratch(horizon, today)
+                    plan = self._create_plan_from_scratch(horizon, today, tasks)
 
             except ValueError as e:
                 logger.warning(f'A error occurred while loading a plan from the DB: "{e}"')
                 logger.info('Creating a new plan')
 
                 Plan.set_inactive_by_horizon(horizon)
-                plan = self.create_plan_from_scratch(horizon, today)
+                plan = self._create_plan_from_scratch(horizon, today, tasks)
 
             self.plans[horizon] = plan
 
@@ -73,11 +71,11 @@ class Planner:
 
         return task_planned
 
-    def create_plan_from_scratch(self, horizon, start):
+    @staticmethod
+    def _create_plan_from_scratch(horizon, start, current_tasks):
         logger.debug(inspect.currentframe().f_code.co_name)
         plan = Plan.create(horizon=horizon, active=True, start=start)
-        self.api.sync_all_objects()
-        plan.fill_from_tasks(self.api.tasks)
+        plan.fill_from_tasks(current_tasks)
         return plan
 
 
@@ -119,7 +117,7 @@ class Plan:
 
     def process_task(self, task: ExtendedTask, action: str) -> bool:
 
-        assert action in config.task_actions, f"Unknown task action '{action}' for task {task.id}"
+        assert action in config.status_transitions, f"Unknown task action '{action}' for task {task.id}"
 
         task_fits_the_plan = self._task_fits_the_plan(task)
 

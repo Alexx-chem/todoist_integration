@@ -1,8 +1,7 @@
 from typing import Iterable, List, Dict, Union
-from todoist_api_python.api import Task
 from time import sleep
 
-from .entity_manager import AbstractEntityManager
+from .entity_manager_abs import AbstractEntityManager, Task
 from src.todoist import ExtendedTask
 
 
@@ -13,6 +12,9 @@ class TasksManager(AbstractEntityManager):
 
     def __init__(self):
         AbstractEntityManager.__init__(self)
+
+    def load_items(self, *args, **kwargs):
+        return super().load_items(*args, **kwargs)
 
     def _get_items_from_api(self):
         return self._to_dict_by_id(self._extend_tasks(self.rest_api.get_tasks()))
@@ -37,7 +39,7 @@ class TasksManager(AbstractEntityManager):
     def _sync_done_tasks(self, projects: List) -> Dict:
         # Heavy operation, avoid to use
         done_tasks = []
-        for project_id in projects:
+        for project_id in projects:         
             done_tasks.extend([ExtendedTask(task.data) for task in self._sync_done_tasks_by_project(project_id)])
             sleep(5)  # in order to prevent DoS, better rework!
 
@@ -59,12 +61,27 @@ class TasksManager(AbstractEntityManager):
 
         return False
 
+    def get_tasks_diff(self, task_ids):
+        return {task_id: self.get_task_diff_by_id(task_id) for task_id in task_ids}
+
     def get_task_diff_by_id(self, task_id: str) -> Dict:
         current_task = self.get_current_item_by_id(task_id)
         synced_task = self.get_synced_item_by_id(task_id)
 
-        for attr in Task.__dict__:
-            pass  # TODO!!111
+        res = {}
+
+        for property_key in vars(Task):
+            old_property_value = vars(current_task)[property_key]
+            new_property_value = vars(synced_task)[property_key]
+            if old_property_value != new_property_value:
+                if property_key == 'due':
+                    if self._due_same_except_string(old_property_value, new_property_value):
+                        self.logger.debug(f'due.string changed: {current_task.content}')
+                        continue
+
+                res[property_key] = {'old': old_property_value,
+                                     'new': new_property_value}
+        return res
 
     def _get_subtasks(self, task: ExtendedTask):
         return [self._current_items[sub]

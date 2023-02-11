@@ -7,8 +7,7 @@ import os
 
 from db_worker import DBWorker
 
-from .entity_manager import AbstractEntityManager
-from src.todoist.entity_managers import Event
+from .entity_manager_abs import AbstractEntityManager, Event
 import config
 
 
@@ -23,6 +22,12 @@ class EventsManager(AbstractEntityManager):
     def sync_items(self, *args, **kwargs):
         page_limit = self._get_pages(self._get_last_known_event_dt())
         super().sync_items(page_limit)
+
+    def load_items(self, *args, **kwargs):
+        return super().load_items(*args, **kwargs)
+
+    def _get_item_from_api(self, _id: str) -> Dict:
+        return super()._get_item_from_api(_id=_id)
 
     def _get_items_from_api(self, page_limit: int, request_limit: int = 100) -> Dict:
 
@@ -78,30 +83,26 @@ class EventsManager(AbstractEntityManager):
         return ((now - last_event_dt).days + 6) // 7
 
     @staticmethod
-    def _get_last_event_for_object_by_type(events: List) -> Dict:
-        # FixMe is this being used?
-
-        events_sorted_by_date = sorted(events, key=itemgetter('event_date'), reverse=True)
+    def _get_last_event_for_object_by_type(events: Dict[str, Event]) -> Dict:
+        events_sorted_by_date = dict(sorted(events.items(), key=lambda item: item[1].event_date))
 
         events_by_type = defaultdict(dict)
         seen = set()
 
-        for event in events_sorted_by_date:
-            event['is_completed'] = event['event_type'] == 'completed'
-            event['is_deleted'] = event['event_type'] == 'deleted'
-            if event['object_id'] not in seen:
-                events_by_type[event['event_type']][event['object_id']] = event
-                seen.add(event['object_id'])
+        for event in events_sorted_by_date.values():
+            if event.object_id not in seen:
+                events_by_type[event.event_type][event.object_id] = event
+                seen.add(event.object_id)
 
         return events_by_type
 
     @staticmethod
-    def _get_events_by_type(events: Dict) -> Dict:
+    def _get_events_by_type(events: Dict[str, Event]) -> Dict:
 
         events_by_type = defaultdict(dict)
 
         for event_id, event in events.items():
-            events_by_type[event['event_type']][event_id] = event
+            events_by_type[event.event_type][event_id] = event
 
         return events_by_type
 
@@ -112,6 +113,14 @@ class EventsManager(AbstractEntityManager):
     @property
     def synced_by_type(self) -> Dict:
         return self._get_events_by_type(self._synced_items)
+
+    @property
+    def current_last_for_item_by_date(self) -> Dict:
+        return self._get_last_event_for_object_by_type(self._current_items)
+
+    @property
+    def synced_last_for_item_by_date(self) -> Dict:
+        return self._get_last_event_for_object_by_type(self._synced_items)
 
     @property
     def new_by_type(self) -> Dict:

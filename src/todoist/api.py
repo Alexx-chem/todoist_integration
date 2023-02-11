@@ -2,7 +2,6 @@ from todoist_api_python.api import TodoistAPI as Rest_API
 from todoist.api import TodoistAPI as Sync_API
 from collections import defaultdict
 from typing import Callable
-import requests
 
 from src.logger import get_logger
 import config
@@ -17,43 +16,6 @@ class TodoistApi:
         self.rest_api = Rest_API(api_token)
         self.sync_api = Sync_API(api_token, api_version=config.TODOIST_API_VERSION)
         self.token = api_token
-
-    def refresh_plans(self):
-        reports = self.planner.refresh_plans()
-        delete_previous = True
-        for horizon in reports:
-            report_text = self._format_report(reports[horizon], horizon)
-            logger.info(report_text)
-            self._send_message_via_bot(report_text, delete_previous=delete_previous)
-            delete_previous = False
-
-    @staticmethod
-    def _format_report(report, horizon, html=True):
-        report_text = f"Report for {horizon} plan:\n\n\n"
-        if html:
-            report_text = "<b>" + report_text + "</b>"
-
-        for section in report:
-            if html:
-                report_text += config.report_sections_marks[section] + ' '
-            report_text += report[section] + '\n\n'
-
-        return report_text
-
-    def get_plan_report(self, horizon):
-        return self.planner.plans[horizon].report()
-
-    @staticmethod
-    def _send_message_via_bot(text, delete_previous=False, save_msg_to_db=True):
-        request = 'http://127.0.0.1:5000/send_message/'
-        request += f'?chat_id={config.ALEXX_TG_CHAT_ID}'
-        request += f'&text={text}'
-        request += f'&delete_previous=true' if delete_previous else ''
-        request += f'&save_msg_to_db=true' if save_msg_to_db else ''
-        try:
-            requests.post(request)
-        except requests.exceptions.ConnectionError:
-            logger.error('Connection to Telegram Bot Core was unsuccessful')
 
     @staticmethod
     def _tasks_by_project_to_string(tasks_by_projects_list, header: str):

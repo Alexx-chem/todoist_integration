@@ -29,7 +29,7 @@ class Event:
         return cls(
             event_date=obj["event_date"],
             event_type=obj["event_type"],
-            extra_data=obj["extra_data"],
+            extra_data=obj.get("extra_data"),
             id=obj["id"],
             initiator_id=obj.get("initiator_id"),
             object_id=obj["object_id"],

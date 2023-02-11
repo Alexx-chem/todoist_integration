@@ -43,6 +43,7 @@ PLAN_HORIZONS = {
 
 status_transitions = {
     'new': ('planned',),
+    'loaded': ('planned',),
     'planned': ('postponed', 'completed', 'deleted'),
     'postponed': ('planned',),
     'completed': ('planned', 'deleted'),

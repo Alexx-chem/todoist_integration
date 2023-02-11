@@ -2,6 +2,7 @@ from datetime import datetime, date, timedelta
 from typing import Union, Dict
 from threading import Thread
 import traceback
+import requests
 
 import config
 
@@ -115,3 +116,17 @@ def get_items_set_operation(left: Dict, right: Dict, op: str) -> Dict:
 
     return {_id: {'left': left[_id],
                   'right': right[_id]} for _id in ids_subset}
+
+
+def send_message_via_bot(text, delete_previous=False, save_msg_to_db=True):
+    request = 'http://127.0.0.1:5000/send_message/'
+    request += f'?chat_id={config.ALEXX_TG_CHAT_ID}'
+    request += f'&text={text}'
+    request += f'&delete_previous=true' if delete_previous else ''
+    request += f'&save_msg_to_db=true' if save_msg_to_db else ''
+    try:
+        requests.post(request)
+    except requests.exceptions.ConnectionError:
+        return False
+
+    return True

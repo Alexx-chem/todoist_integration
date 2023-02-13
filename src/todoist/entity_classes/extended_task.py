@@ -1,6 +1,5 @@
-from datetime import datetime
-from copy import deepcopy
 from todoist_api_python.models import Task, Due
+from datetime import datetime
 from typing import Union
 
 import config
@@ -8,41 +7,81 @@ import config
 
 class ExtendedTask(Task):
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(self, *args, **kwargs)
+    def __init__(self,
+                 comment_count,
+                 is_completed,
+                 content,
+                 created_at,
+                 creator_id,
+                 description,
+                 id,
+                 priority,
+                 project_id,
+                 section_id,
+                 url,
+                 assignee_id=None,
+                 assigner_id=None,
+                 due=None,
+                 labels=None,
+                 order=None,
+                 parent_id=None,
+                 is_deleted=None,
+                 is_goal=None,
+                 is_active_goal=None,
+                 is_active_with_due=None,
+                 is_active_no_due=None,
+                 is_active=None,
+                 is_in_focus=None,
+                 **kwargs):
+        if due is not None:
+            due = Due.from_dict(due)
+        super().__init__(comment_count=comment_count,
+                         is_completed=is_completed,
+                         content=content,
+                         created_at=created_at,
+                         creator_id=creator_id,
+                         description=description,
+                         id=id,
+                         priority=priority,
+                         project_id=project_id,
+                         section_id=section_id,
+                         url=url,
+                         assignee_id=assignee_id,
+                         assigner_id=assigner_id,
+                         due=due,
+                         labels=labels,
+                         order=order,
+                         parent_id=parent_id)
 
-        self.is_deleted = None
-        self.is_goal = None
-        self.is_active_goal = None
+        self.is_deleted = is_deleted
+        self.is_goal = is_goal
+        self.is_active_goal = is_active_goal
 
-        self.is_active_with_due = None
-        self.is_active_no_due = None
+        self.is_active_with_due = is_active_with_due
+        self.is_active_no_due = is_active_no_due
 
-        self.is_active = None
-        self.is_in_focus = None
+        self.is_active = is_active
+        self.is_in_focus = is_in_focus
 
-    def extend(self, task: Union[Task, dict]):
-        if isinstance(task, Task):
-            self.__dict__ = deepcopy(task.__dict__)
+    @classmethod
+    def extend(cls, task: Task):
+        extended = cls(**task.to_dict())
 
-        self.is_deleted = False
+        extended.is_deleted = False
 
-        if isinstance(task, dict):
-            super().__init__(*[None]*17)
-            self.__dict__.update(task)
-            self.is_completed = True
+        extended.is_goal = config.SPECIAL_LABELS['GOAL_LABEL_NAME'] in extended.labels
+        extended.is_active_goal = bool(not extended.is_completed and extended.is_goal and extended.priority in (3, 4))
 
-        self.is_goal = config.SPECIAL_LABELS['GOAL_LABEL_NAME'] in self.labels
-        self.is_active_goal = bool(not self.is_completed and self.is_goal and self.priority in (3, 4))
+        extended.is_active_with_due = bool(not extended.is_completed and extended.priority in (3, 4) and extended.due)
+        extended.is_active_no_due = bool(not extended.is_completed and extended.priority in (2, 4) and not extended.due)
 
-        self.is_active_with_due = bool(not self.is_completed and self.priority in (3, 4) and self.due)
-        self.is_active_no_due = bool(not self.is_completed and self.priority in (2, 4) and not self.due)
+        extended.is_active = bool(not extended.is_completed and (extended.is_active_with_due or
+                                                                 extended.is_active_no_due or
+                                                                 extended.is_active_goal))
 
-        self.is_active = bool(not self.is_completed and (self.is_active_with_due or
-                                                         self.is_active_no_due or
-                                                         self.is_active_goal))
+        extended.is_in_focus = extended._is_in_focus()
 
-        self.is_in_focus = self._is_in_focus()
+        return extended
 
     def _is_active_with_due(self):
         return

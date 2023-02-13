@@ -4,18 +4,17 @@ import inspect
 
 from db_worker import DBWorker
 
-from src.functions import get_chained_attr, get_items_set_operation
+from src.functions import get_items_set_operation
 from src.todoist.api import TodoistApi
 from src.logger import get_logger
-from . import ENTITY_ITEMS_TYPING
 
 import config
 
 
 class AbstractEntityManager(ABC, TodoistApi):
-    _entity_name: Union[str, None] = None
-    _entity_type: Union[ENTITY_ITEMS_TYPING, None] = None
-    _attrs: Union[List, None] = None
+    _entity_name = None
+    _entity_type = None
+    _attrs = None
 
     def __init__(self):
         TodoistApi.__init__(self, config.TODOIST_API_TOKEN)
@@ -57,10 +56,7 @@ class AbstractEntityManager(ABC, TodoistApi):
 
     def _get_items_from_db(self) -> Dict:
         joiner = '", "'
-        query = f'select "{joiner.join(self._attrs)}" from {self._entity_name}'
-        print(query)
-        items = query
-        print(items)
+        items = DBWorker.select(f'select "{joiner.join(self._attrs)}" from {self._entity_name}')
         items_list = (self._entity_type.from_dict(dict(zip(self._attrs, row))) for row in items)
         return self._to_dict_by_id(items_list)
 
@@ -70,41 +66,8 @@ class AbstractEntityManager(ABC, TodoistApi):
         item_dict = {item[0]: item}
         return self._entity_type.from_dict(item_dict)
 
-    def _save_items_to_db(self, items: Dict,
-                          save_mode: str,
-                          add_raw_data: bool = True):
-
-        query = f'insert into {self._entity_name} ({", ".join(self._attrs)}{", raw_data" if add_raw_data else ""}) ' \
-                f'SELECT {", ".join(["unnest(%(" + field_name + ")s)" for field_name in self._attrs])} '
-        if add_raw_data:
-            query += f", unnest({', '.join(item.__dict__ for item in items)}) "
-
-        values = self._prepare_values(items)
-
-        if save_mode == 'delete_all':
-            DBWorker.input(f'delete from {self._entity_name}')
-
-        elif save_mode == 'increment':
-            query += f'where id not in (select id from {self._entity_name})'
-
-        DBWorker.input(query, data=values)
-
-    def _prepare_values(self, items: Dict[str, ENTITY_ITEMS_TYPING]) -> Dict:
-        """
-        Transforms
-        :param items: list of objects of one of types from _items_typing
-        to
-        :return: dict of columns of object attributes, corresponding to self._attrs
-        """
-        vals = []
-        for item in items:
-            vals.append(get_chained_attr(item, k.split('.')) for k in self._attrs)
-
-        return dict(zip(self._attrs,
-                        zip(*vals)))
-
     @staticmethod
-    def _to_dict_by_id(items: Iterable[ENTITY_ITEMS_TYPING]) -> Dict:
+    def _to_dict_by_id(items: Iterable) -> Dict:
         return {obj.id: obj for obj in items}
 
     @property
@@ -179,13 +142,13 @@ class AbstractEntityManager(ABC, TodoistApi):
                                            right=current,
                                            op=f'difference')
 
-    def get_current_item_by_id(self, item_id: str) -> ENTITY_ITEMS_TYPING:
+    def get_current_item_by_id(self, item_id: str) -> _entity_type:
         return self._current_items[item_id]
 
-    def get_synced_item_by_id(self, item_id: str) -> ENTITY_ITEMS_TYPING:
+    def get_synced_item_by_id(self, item_id: str) -> _entity_type:
         return self._synced_items[item_id]
 
-    def __items_dict_to_obj(self, item_dict_list: List[Dict]) -> List:
+    def _items_dict_to_obj(self, item_dict_list: List[Dict]) -> List:
         return [self._entity_type.from_dict(item) for item in item_dict_list]
 
 

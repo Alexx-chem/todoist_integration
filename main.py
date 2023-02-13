@@ -21,6 +21,8 @@ if __name__ == '__main__':
 
     job_manager.get_task_state()
 
+    pipeline.refresh_plans()
+
     while True:
         sleep(config.TODOIST_SYNC_TIMEOUT)
         pipeline.sync_all_items()

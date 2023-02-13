@@ -1,5 +1,5 @@
 from datetime import datetime, date, timedelta
-from typing import Union, Dict
+from typing import Union, Dict, Iterable
 from threading import Thread
 import traceback
 import requests
@@ -81,10 +81,11 @@ def set_db_timezone(utcoffset: str = None):
 
 def get_chained_attr(class_obj, attr_chain):
 
-    if len(attr_chain) == 0:
+    if not attr_chain or class_obj is None:
         return class_obj
 
     obj = class_obj.__dict__[attr_chain.pop(0)]
+
     return get_chained_attr(obj, attr_chain)
 
 
@@ -127,3 +128,44 @@ def send_message_via_bot(text, delete_previous=False, save_msg_to_db=True):
 
     return requests.post(request)
 
+
+def save_items_to_db(entity: str,
+                     items: Dict,
+                     attrs: Dict,
+                     save_mode: str):
+
+    assert save_mode in ('delete_all', 'increment'), f'Unknown save_mode: {save_mode}'
+
+    attrs_joined = '", "'.join(attrs.keys())
+    query = f'INSERT INTO {entity} ("{attrs_joined}") ' \
+            f'SELECT {", ".join(["unnest(%("+col+")s::"+props["col_type"]+"[])" for col, props in attrs.items()])} '
+
+    values = prepare_values(attrs.keys(), items)
+
+    if save_mode == 'delete_all':
+        DBWorker.input(f'delete from {entity}')
+
+    elif save_mode == 'increment':
+        query += f'where id not in (select id from {entity})'
+
+    print(query)
+    # print(values)
+
+    DBWorker.input(query, data=values)
+
+
+def prepare_values(attrs: Iterable,
+                   items: Dict) -> Dict:
+    """
+    Transforms
+    :param items: list of objects of one of types from _items_typing
+    and
+    :param attrs: list of column names
+    to
+    :return: dict of columns of object attributes, corresponding to self._attrs
+    """
+    vals = []
+    for item in items:
+        vals.append(get_chained_attr(items[item], k.split('.')) for k in attrs)
+
+    return dict(zip(attrs, [list(x) for x in zip(*vals)]))

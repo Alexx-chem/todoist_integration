@@ -1,9 +1,11 @@
 from requests.exceptions import ConnectionError
 
+# DON'T DELETE! These are used in dirty eva(i)l hacks
+from src.todoist.entity_managers import TasksManager, ProjectsManager, SectionsManager, LabelsManager, EventsManager
 
+from src.functions import set_db_timezone, send_message_via_bot
 from src.todoist.entity_managers import ENTITY_CONFIG
 from src.todoist.planner import Planner
-from src.functions import set_db_timezone, send_message_via_bot
 from src.logger import get_logger
 
 import config
@@ -18,7 +20,6 @@ class Pipeline:
         self.managers = self._get_managers()
 
         self.planner = Planner()
-        self.refresh_plans(self._get_current_entity_scope('tasks'))
 
         if localize_db_timezone:
             set_db_timezone()
@@ -36,8 +37,9 @@ class Pipeline:
         self.managers[entity_type].sync_items()
         return self.managers[entity_type].synced
 
-    def refresh_plans(self, current_tasks):
-        reports = self.planner.refresh_plans(current_tasks)
+    def refresh_plans(self):
+
+        reports = self.planner.refresh_plans(self.managers['tasks'].current)
         delete_previous = True
         for horizon in reports:
             report_text = self._format_report(reports[horizon], horizon)

@@ -56,7 +56,7 @@ class EventsManager(AbstractEntityManager):
 
             page += 1
 
-        return self._to_dict_by_id(self.__items_dict_to_obj(events_list))
+        return self._to_dict_by_id(self._items_dict_to_obj(events_list))
 
     def _get_activity_page(self, limit: int, offset: int, page: int) -> Dict:
         request = f'curl -s https://api.todoist.com/sync/{config.TODOIST_API_VERSION}/activity/get/ ' \
@@ -67,8 +67,8 @@ class EventsManager(AbstractEntityManager):
 
     @staticmethod
     def _get_last_known_event_dt() -> Union[datetime, None]:
-        last_event_datetime_db = DBWorker.select('select event_datetime from events '
-                                                 'order by event_datetime desc limit 1', fetch='one')
+        last_event_datetime_db = DBWorker.select('select event_date from events '
+                                                 'order by event_date desc limit 1', fetch='one')
         if not last_event_datetime_db:
             return None
 

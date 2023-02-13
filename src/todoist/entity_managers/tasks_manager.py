@@ -31,7 +31,7 @@ class TasksManager(AbstractEntityManager):
 
     @staticmethod
     def _extend_task(task: Task) -> _entity_type:
-        return ExtendedTask(task)
+        return ExtendedTask.extend(task)
 
     def get_filtered_new_items(self, *args, **kwargs):
         pass

@@ -1,5 +1,5 @@
 from typing import Iterable, List, Dict, Union
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 import inspect
 
 from db_worker import DBWorker
@@ -11,19 +11,20 @@ from src.logger import get_logger
 import config
 
 
-class AbstractEntityManager(ABC, TodoistApi):
+class BaseEntityManager:
     _entity_name = None
     _entity_type = None
     _attrs = None
+    api = None
 
     def __init__(self):
-        TodoistApi.__init__(self, config.TODOIST_API_TOKEN)
         self.logger = get_logger(self.__class__.__name__, 'console', config.GLOBAL_LOG_LEVEL)
 
         self._current_items: Union[Dict, None] = None
         self._synced_items: Union[Dict, None] = None
 
-        self.load_items()
+        if self.api is None:
+            self.api = TodoistApi(config.TODOIST_API_TOKEN)
 
     @abstractmethod
     def load_items(self, *args, **kwargs):
@@ -150,8 +151,3 @@ class AbstractEntityManager(ABC, TodoistApi):
 
     def _items_dict_to_obj(self, item_dict_list: List[Dict]) -> List:
         return [self._entity_type.from_dict(item) for item in item_dict_list]
-
-
-class BaseEntityManager(AbstractEntityManager):
-    # TODO!
-    pass

@@ -2,28 +2,28 @@ from typing import Iterable, List, Dict
 from todoist_api_python.models import Task
 from time import sleep
 
-from .entity_manager_abs import AbstractEntityManager
+from .entity_manager_abs import BaseEntityManager
 from src.todoist import ExtendedTask
 from . import ENTITY_CONFIG
 
 
-class TasksManager(AbstractEntityManager):
+class TasksManager(BaseEntityManager):
 
     _entity_name = 'tasks'
     _entity_type = ENTITY_CONFIG[_entity_name]['entity_type']
     _attrs = ENTITY_CONFIG[_entity_name]['attrs'].keys()
 
     def __init__(self):
-        AbstractEntityManager.__init__(self)
+        BaseEntityManager.__init__(self)
 
     def load_items(self, *args, **kwargs):
         return super().load_items(*args, **kwargs)
 
     def _get_items_from_api(self):
-        return self._to_dict_by_id(self._extend_tasks(self.rest_api.get_tasks()))
+        return self._to_dict_by_id(self._extend_tasks(self.api.rest_api.get_tasks()))
 
     def _get_item_from_api(self, _id) -> Dict[str, _entity_type]:
-        ext_task = self._extend_task(self.rest_api.get_task(task_id=_id))
+        ext_task = self._extend_task(self.api.rest_api.get_task(task_id=_id))
         return {ext_task.id: ext_task}
 
     def _extend_tasks(self, tasks: Iterable[Task]) -> List[_entity_type]:
@@ -43,14 +43,14 @@ class TasksManager(AbstractEntityManager):
         # Heavy operation, avoid to use
         done_tasks = []
         for project_id in projects:         
-            done_tasks.extend([ExtendedTask(task.data) for task in self._sync_done_tasks_by_project(project_id)])
+            done_tasks.extend([ExtendedTask.extend(task.data) for task in self._sync_done_tasks_by_project(project_id)])
             sleep(5)  # in order to prevent DoS, better rework!
 
         return self._to_dict_by_id(done_tasks)
 
     def _sync_done_tasks_by_project(self, project_id: str) -> List:
         try:
-            return self.sync_api.items_archive.for_project(project_id).items()
+            return self.api.sync_api.items_archive.for_project(project_id).items()
         except ConnectionError as e:
             self.logger.error(f'Sync error. {e}')
             return []

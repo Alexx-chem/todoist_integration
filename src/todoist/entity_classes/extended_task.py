@@ -96,6 +96,8 @@ class ExtendedTask(Task):
         if self.is_active_with_due:
             return datetime.strptime(self.due.date, config.TODOIST_DATE_FORMAT).date() <= datetime.now().date()
 
+        return False
+
     @classmethod
     def from_dict(cls, obj):
         due: Union[Due, None] = None

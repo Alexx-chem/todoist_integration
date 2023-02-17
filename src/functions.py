@@ -1,6 +1,7 @@
 from datetime import datetime, date, timedelta
-from typing import Union, Dict, Iterable
+from typing import Union, Dict, List
 from threading import Thread
+from psycopg2.extras import Json
 import traceback
 import requests
 
@@ -79,12 +80,12 @@ def set_db_timezone(utcoffset: str = None):
     DBWorker.input(f"SET timezone TO {utcoffset}")
 
 
-def get_chained_attr(class_obj, attr_chain):
+def get_chained_attr(obj, attr_chain):
 
-    if not attr_chain or class_obj is None:
-        return class_obj
+    if not attr_chain or obj is None:
+        return obj
 
-    obj = class_obj.__dict__[attr_chain.pop(0)]
+    obj = obj.__dict__[attr_chain.pop(0)]
 
     return get_chained_attr(obj, attr_chain)
 
@@ -137,10 +138,8 @@ def save_items_to_db(entity: str,
     assert save_mode in ('delete_all', 'increment'), f'Unknown save_mode: {save_mode}'
 
     attrs_joined = '", "'.join(attrs.keys())
-    query = f'INSERT INTO {entity} ("{attrs_joined}") ' \
-            f'SELECT {", ".join(["unnest(%("+col+")s::"+props["col_type"]+"[])" for col, props in attrs.items()])} '
-
-    values = prepare_values(attrs.keys(), items)
+    values_template = ','.join(['%s'] * len(items))
+    query = f'INSERT INTO {entity} ("{attrs_joined}") VALUES {values_template}'
 
     if save_mode == 'delete_all':
         DBWorker.input(f'delete from {entity}')
@@ -148,24 +147,19 @@ def save_items_to_db(entity: str,
     elif save_mode == 'increment':
         query += f'where id not in (select id from {entity})'
 
-    print(query)
-    # print(values)
+    values = prepare_values(attrs, items)
 
     DBWorker.input(query, data=values)
 
 
-def prepare_values(attrs: Iterable,
-                   items: Dict) -> Dict:
-    """
-    Transforms
-    :param items: list of objects of one of types from _items_typing
-    and
-    :param attrs: list of column names
-    to
-    :return: dict of columns of object attributes, corresponding to self._attrs
-    """
-    vals = []
-    for item in items:
-        vals.append(get_chained_attr(items[item], k.split('.')) for k in attrs)
+def prepare_values(attrs: Dict, items: Dict) -> List:
 
-    return dict(zip(attrs, [list(x) for x in zip(*vals)]))
+    return [tuple(convert_to_json_if_dict(get_chained_attr(obj, attr.split('.'))) for attr in attrs) for obj in items.values()]
+
+
+def convert_to_json_if_dict(item):
+
+    if isinstance(item, dict):
+        item = Json(item)
+
+    return item

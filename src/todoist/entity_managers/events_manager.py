@@ -6,20 +6,20 @@ import os
 
 from db_worker import DBWorker
 
-from .entity_manager_abs import AbstractEntityManager
+from .entity_manager_abs import BaseEntityManager
 from src.todoist.entity_classes import Event
 from . import ENTITY_CONFIG
 import config
 
 
-class EventsManager(AbstractEntityManager):
+class EventsManager(BaseEntityManager):
 
     _entity_name = 'events'
     _entity_type = ENTITY_CONFIG[_entity_name]['entity_type']
     _attrs = ENTITY_CONFIG[_entity_name]['attrs'].keys()
 
     def __init__(self):
-        AbstractEntityManager.__init__(self)
+        BaseEntityManager.__init__(self)
 
     def sync_items(self, *args, **kwargs):
         page_limit = self._get_pages(self._get_last_known_event_dt())
@@ -60,7 +60,7 @@ class EventsManager(AbstractEntityManager):
 
     def _get_activity_page(self, limit: int, offset: int, page: int) -> Dict:
         request = f'curl -s https://api.todoist.com/sync/{config.TODOIST_API_VERSION}/activity/get/ ' \
-                  f'-H "Authorization: Bearer {self.token}" '
+                  f'-H "Authorization: Bearer {self.api.token}" '
         request += f'-d page={page} -d limit={limit} -d offset={offset} '
         response = os.popen(request)
         return json.loads(response.read())

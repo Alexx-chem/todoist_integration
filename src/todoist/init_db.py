@@ -1,4 +1,4 @@
-from src.functions import prepare_values, save_items_to_db
+from src.functions import _prepare_values, save_items_to_db
 from .entity_managers import ENTITY_CONFIG
 from db_worker import DBWorker
 
@@ -51,7 +51,6 @@ def init_system_params():
     DBWorker.input("INSERT INTO system_params param VALUES ('tables_created'),"
                    "                                       ('initial_tables_fill_complete'),"
                    "                                       ('')")
-
 
 
 def fill_item_tables():

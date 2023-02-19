@@ -1,6 +1,6 @@
 from todoist_api_python.models import Task, Due
-from datetime import datetime
-from typing import Union
+from typing import Union, Dict
+from datetime import datetime, date
 
 import config
 
@@ -26,15 +26,11 @@ class ExtendedTask(Task):
                  order=None,
                  parent_id=None,
                  is_deleted=None,
-                 is_goal=None,
-                 is_active_goal=None,
-                 is_active_with_due=None,
-                 is_active_no_due=None,
-                 is_active=None,
-                 is_in_focus=None,
+                 # Do NOT delete kwargs!
                  **kwargs):
         if due is not None:
             due = Due.from_dict(due)
+
         super().__init__(comment_count=comment_count,
                          is_completed=is_completed,
                          content=content,
@@ -54,14 +50,6 @@ class ExtendedTask(Task):
                          parent_id=parent_id)
 
         self.is_deleted = is_deleted
-        self.is_goal = is_goal
-        self.is_active_goal = is_active_goal
-
-        self.is_active_with_due = is_active_with_due
-        self.is_active_no_due = is_active_no_due
-
-        self.is_active = is_active
-        self.is_in_focus = is_in_focus
 
     @classmethod
     def extend(cls, task: Task):
@@ -69,24 +57,32 @@ class ExtendedTask(Task):
 
         extended.is_deleted = False
 
-        extended.is_goal = config.SPECIAL_LABELS['GOAL_LABEL_NAME'] in extended.labels
-        extended.is_active_goal = bool(not extended.is_completed and extended.is_goal and extended.priority in (3, 4))
-
-        extended.is_active_with_due = bool(not extended.is_completed and extended.priority in (3, 4) and extended.due)
-        extended.is_active_no_due = bool(not extended.is_completed and extended.priority in (2, 4) and not extended.due)
-
-        extended.is_active = bool(not extended.is_completed and (extended.is_active_with_due or
-                                                                 extended.is_active_no_due or
-                                                                 extended.is_active_goal))
-
-        extended.is_in_focus = extended._is_in_focus()
-
         return extended
 
-    def _is_active_with_due(self):
-        return
+    @property
+    def is_goal(self):
+        return config.SPECIAL_LABELS['GOAL_LABEL_NAME'] in self.labels
 
-    def _is_in_focus(self):
+    @property
+    def is_active(self):
+        return bool(not self.is_completed and (self.is_active_with_due or
+                                               self.is_active_no_due or
+                                               self.is_active_goal))
+
+    @property
+    def is_active_goal(self):
+        return bool(not self.is_completed and self.is_goal and self.priority in (3, 4))
+
+    @property
+    def is_active_with_due(self):
+        return bool(not self.is_completed and self.priority in (3, 4) and self.due)
+
+    @property
+    def is_active_no_due(self):
+        return bool(not self.is_completed and self.priority in (2, 4) and not self.due)
+
+    @property
+    def is_in_focus(self):
         if self.is_completed or self.is_goal:
             return False
 
@@ -100,10 +96,17 @@ class ExtendedTask(Task):
 
     @classmethod
     def from_dict(cls, obj):
-        due: Union[Due, None] = None
+        due: Union[Dict, None] = None
 
-        if obj.get("due"):
-            due = Due.from_dict(obj["due"])
+        due_dict = {k.split('.')[1]: v for k, v in obj.items() if k.startswith('due.')}
+
+        if any(due_dict.values()):
+            # in order to store dates consistently with original objects
+            if due_dict['date'] is not None and isinstance(due_dict['date'], date):
+                due_dict['date'] = due_dict['date'].strftime(config.TODOIST_DATE_FORMAT)
+            if due_dict['datetime'] is not None and isinstance(due_dict['datetime'], datetime):
+                due_dict['datetime'] = due_dict['datetime'].strftime(config.TODOIST_DATETIME_FORMAT)
+            due = due_dict
 
         return cls(
             assignee_id=obj.get("assignee_id"),
@@ -123,13 +126,7 @@ class ExtendedTask(Task):
             project_id=obj["project_id"],
             section_id=obj["section_id"],
             url=obj["url"],
-            is_deleted=obj.get("is_deleted"),
-            is_goal=obj.get("is_goal"),
-            is_active_goal=obj.get("is_active_goal"),
-            is_active_with_due=obj.get("is_active_with_due"),
-            is_active_no_due=obj.get("is_active_no_due"),
-            is_active=obj.get("is_active"),
-            is_in_focus=obj.get("is_in_focus")
+            is_deleted=obj.get("is_deleted")
         )
 
     def to_dict(self):

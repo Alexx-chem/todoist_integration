@@ -5,7 +5,6 @@ from src.todoist import ExtendedTask
 
 ENTITY_CONFIG = {
     'tasks': {
-        'manager_class_name': 'TasksManager',
         'entity_type': ExtendedTask,
         'attrs': {
             'assignee_id': {'col_type': 'varchar',
@@ -31,7 +30,7 @@ ENTITY_CONFIG = {
             'due.datetime': {'col_type': 'timestamp',
                              'constraints': ''},
             'due.is_recurring': {'col_type': 'bool',
-                                 'constraints': ''},
+                                 'constraints': 'NOT NULL DEFAULT false'},
             'due.timezone': {'col_type': 'varchar',
                              'constraints': ''},
             'id': {'col_type': 'varchar',
@@ -68,7 +67,6 @@ ENTITY_CONFIG = {
         'pk': 'id'
     },
     'projects': {
-        'manager_class_name': 'ProjectsManager',
         'entity_type': Project,
         'attrs': {
             'color': {'col_type': 'varchar',
@@ -98,20 +96,19 @@ ENTITY_CONFIG = {
         }
     },
     'sections': {
-        'manager_class_name': 'SectionsManager',
         'entity_type': Section,
-        'attrs': {'id': {'col_type': 'varchar',
-                         'constraints': 'NOT NULL'},
-                  'name': {'col_type': 'varchar',
+        'attrs': {
+            'id': {'col_type': 'varchar',
+                   'constraints': 'NOT NULL'},
+            'name': {'col_type': 'varchar',
+                     'constraints': 'NOT NULL'},
+            'order': {'col_type': 'integer',
+                      'constraints': ''},
+            'project_id': {'col_type': 'varchar',
                            'constraints': 'NOT NULL'},
-                  'order': {'col_type': 'integer',
-                            'constraints': ''},
-                  'project_id': {'col_type': 'varchar',
-                                 'constraints': 'NOT NULL'},
-                  }
+        }
     },
     'labels': {
-        'manager_class_name': 'LabelsManager',
         'entity_type': Label,
         'attrs': {
             'id': {'col_type': 'varchar',
@@ -127,7 +124,6 @@ ENTITY_CONFIG = {
         }
     },
     'events': {
-        'manager_class_name': 'EventsManager',
         'entity_type': Event,
         'attrs': {
             'event_date': {'col_type': 'timestamp',

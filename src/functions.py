@@ -4,6 +4,7 @@ from threading import Thread
 from psycopg2.extras import Json
 import traceback
 import requests
+import json
 
 import config
 
@@ -80,14 +81,14 @@ def set_db_timezone(utcoffset: str = None):
     DBWorker.input(f"SET timezone TO {utcoffset}")
 
 
-def get_chained_attr(obj, attr_chain):
+def unpack_chained_attr(obj, attr_chain):
 
     if not attr_chain or obj is None:
         return obj
 
-    obj = obj.__dict__[attr_chain.pop(0)]
+    obj = getattr(obj, attr_chain.pop(0))
 
-    return get_chained_attr(obj, attr_chain)
+    return unpack_chained_attr(obj, attr_chain)
 
 
 def convert_dt(dt: Union[datetime, date, str], str_type='datetime'):
@@ -108,16 +109,18 @@ def convert_dt(dt: Union[datetime, date, str], str_type='datetime'):
 def get_items_set_operation(left: Dict, right: Dict, op: str) -> Dict:
     assert op in ('intersection', 'difference'), f'Unknown op value: {op}'
 
-    ids_subset = set()
+    res = {}
 
     if op == 'intersection':
         ids_subset = left.keys() & right.keys()
+        res = {_id: {'left': left.get(_id),
+                     'right': right.get(_id)} for _id in ids_subset}
 
     if op == 'difference':
         ids_subset = left.keys() - right.keys()
+        res = {_id: left.get(_id) for _id in ids_subset}
 
-    return {_id: {'left': left[_id],
-                  'right': right[_id]} for _id in ids_subset}
+    return res
 
 
 def send_message_via_bot(text, delete_previous=False, save_msg_to_db=True):
@@ -131,35 +134,65 @@ def send_message_via_bot(text, delete_previous=False, save_msg_to_db=True):
 
 
 def save_items_to_db(entity: str,
-                     items: Dict,
                      attrs: Dict,
+                     items: Dict,
                      save_mode: str):
 
-    assert save_mode in ('delete_all', 'increment'), f'Unknown save_mode: {save_mode}'
+    assert save_mode in ('delete_all', 'increment', 'update'), f'Unknown save_mode: {save_mode}'
+
+    if save_mode in ('delete_all', 'increment'):
+        _insert_items_to_db(entity=entity,
+                            attrs=attrs,
+                            items=items,
+                            save_mode=save_mode)
+
+    elif save_mode == 'update':
+        _update_items_in_db(entity=entity,
+                            attrs=attrs,
+                            items=items)
+
+
+def _insert_items_to_db(entity: str,
+                        attrs: Dict,
+                        items: Dict,
+                        save_mode: str):
 
     attrs_joined = '", "'.join(attrs.keys())
     values_template = ','.join(['%s'] * len(items))
+
     query = f'INSERT INTO {entity} ("{attrs_joined}") VALUES {values_template}'
 
+    if save_mode == 'increment':
+        query += f' ON CONFLICT (id) DO NOTHING'
+
     if save_mode == 'delete_all':
-        DBWorker.input(f'delete from {entity}')
+        DBWorker.input(f'DELETE FROM {entity}')
 
-    elif save_mode == 'increment':
-        query += f'where id not in (select id from {entity})'
-
-    values = prepare_values(attrs, items)
+    values = _prepare_values(attrs, items)
 
     DBWorker.input(query, data=values)
 
 
-def prepare_values(attrs: Dict, items: Dict) -> List:
+def _update_items_in_db(entity, attrs, items):
+    attrs_joined = '"=%s, "'.join(attrs.keys()) + '"=%s'
+    query = f'UPDATE {entity} SET "{attrs_joined} WHERE id='
 
-    return [tuple(convert_to_json_if_dict(get_chained_attr(obj, attr.split('.'))) for attr in attrs) for obj in items.values()]
+    for item in items.values():
+        # FIXME hack with indexing
+        query += f"'{item.id}'"
+        values = _prepare_values(attrs=attrs, items={item.id: item})[0]
+        DBWorker.input(query, data=values)
 
 
-def convert_to_json_if_dict(item):
+def _prepare_values(attrs: Dict, items: Dict) -> List:
 
-    if isinstance(item, dict):
-        item = Json(item)
+    return [tuple(convert_to_json_if_dict(unpack_chained_attr(obj, attr.split('.')))
+                  for attr in attrs) for obj in items.values()]
 
-    return item
+
+def convert_to_json_if_dict(attr_value):
+
+    if isinstance(attr_value, dict):
+        attr_value = Json(attr_value, dumps=lambda x: json.dumps(x, ensure_ascii=False))
+
+    return attr_value

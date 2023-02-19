@@ -26,6 +26,20 @@ class BaseEntityManager:
         if self.api is None:
             self.api = TodoistApi(config.TODOIST_API_TOKEN)
 
+        self.load_items()
+
+    @property
+    def attrs(self):
+        return self._attrs
+
+    @property
+    def entity_name(self):
+        return self._entity_name
+
+    @property
+    def entity_type(self):
+        return self._entity_type
+
     @abstractmethod
     def load_items(self, *args, **kwargs):
         self.logger.debug(f'{inspect.currentframe().f_code.co_name} called')
@@ -48,21 +62,23 @@ class BaseEntityManager:
         """
         Entity Manager abstract method for objects synchronization
         """
+        raise NotImplemented
 
     @abstractmethod
     def _get_item_from_api(self, _id: str) -> Dict:
         """
         Entity Manager abstract method for single object synchronization
         """
+        raise NotImplemented
 
     def _get_items_from_db(self) -> Dict:
         joiner = '", "'
-        items = DBWorker.select(f'select "{joiner.join(self._attrs)}" from {self._entity_name}')
-        items_list = (self._entity_type.from_dict(dict(zip(self._attrs, row))) for row in items)
+        items = DBWorker.select(f'select "{joiner.join(self._attrs.keys())}" from {self._entity_name}')
+        items_list = (self._entity_type.from_dict(dict(zip(self._attrs.keys(), row))) for row in items)
         return self._to_dict_by_id(items_list)
 
     def _get_item_from_db(self, _id: str) -> Dict:
-        item = DBWorker.select(f"select {', '.join(self._attrs)} from {self._entity_name} where id = '{_id}'",
+        item = DBWorker.select(f"select {', '.join(self._attrs.keys())} from {self._entity_name} where id = '{_id}'",
                                fetch='one')
         item_dict = {item[0]: item}
         return self._entity_type.from_dict(item_dict)
@@ -81,42 +97,25 @@ class BaseEntityManager:
 
     @property
     def updated_diff(self) -> Dict:
-        return self._get_updated_items(mode='diff')
+        return self._get_updated_items()
 
-    @property
-    def updated_current(self) -> Dict:
-        return self._get_updated_items(mode='current')
+    def _get_updated_items(self):
 
-    @property
-    def updated_synced(self) -> Dict:
-        return self._get_updated_items(mode='synced')
-
-    def _get_updated_items(self, mode: str):
-
-        assert mode in ('current', 'synced', 'diff'), f'Unknown mode value: {mode}'
-
-        mode_converter = {'current': 'left',
-                          'synced': 'right'}
-
-        current = self.current
-        synced = self.synced
-
-        intersection = get_items_set_operation(left=current,
-                                               right=synced,
+        intersection = get_items_set_operation(left=self.current,
+                                               right=self.synced,
                                                op='intersection')
         res = {}
         for _id in intersection:
+            res[_id] = {}
+            current_updated = intersection[_id]['left']
+            synced_updated = intersection[_id]['right']
 
-            if mode in ('current', 'synced'):
-                res[_id] = intersection[_id][mode_converter[mode]]
-            elif mode == 'diff':
-                res[_id] = {}
-                for property_key in intersection[_id]:
-                    current_value = current[_id][property_key]
-                    synced_value = synced[_id][property_key]
-                    if current_value != synced_value:
-                        res[_id][property_key] = {'current': current_value,
-                                                  'synced': synced_value}
+            for attr in self._attrs:
+                current_value = current_updated[attr]
+                synced_value = synced_updated[attr]
+                if current_value != synced_value:
+                    res[_id][attr] = {'current': current_value,
+                                      'synced': synced_value}
         return res
 
     @property

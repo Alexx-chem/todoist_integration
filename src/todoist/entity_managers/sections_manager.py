@@ -1,6 +1,6 @@
 from typing import Dict
 
-from .entity_manager_abs import BaseEntityManager
+from .base_entity_manager import BaseEntityManager
 from . import ENTITY_CONFIG
 
 
@@ -8,7 +8,7 @@ class SectionsManager(BaseEntityManager):
 
     _entity_name = 'sections'
     _entity_type = ENTITY_CONFIG[_entity_name]['entity_type']
-    _attrs = ENTITY_CONFIG[_entity_name]['attrs'].keys()
+    _attrs = ENTITY_CONFIG[_entity_name]['attrs']
 
     def __init__(self):
         BaseEntityManager.__init__(self)

@@ -30,9 +30,9 @@ class Event:
             event_date=obj["event_date"],
             event_type=obj["event_type"],
             extra_data=obj.get("extra_data"),
-            id=obj["id"],
+            id=str(obj["id"]),
             initiator_id=obj.get("initiator_id"),
-            object_id=obj["object_id"],
+            object_id=str(obj["object_id"]),
             parent_item_id=obj.get("parent_item_id"),
             object_type=obj["object_type"],
             parent_project_id=obj.get("parent_project_id")

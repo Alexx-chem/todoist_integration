@@ -2,7 +2,7 @@ from typing import Iterable, List, Dict
 from todoist_api_python.models import Task
 from time import sleep
 
-from .entity_manager_abs import BaseEntityManager
+from .base_entity_manager import BaseEntityManager
 from src.todoist import ExtendedTask
 from . import ENTITY_CONFIG
 
@@ -11,7 +11,7 @@ class TasksManager(BaseEntityManager):
 
     _entity_name = 'tasks'
     _entity_type = ENTITY_CONFIG[_entity_name]['entity_type']
-    _attrs = ENTITY_CONFIG[_entity_name]['attrs'].keys()
+    _attrs = ENTITY_CONFIG[_entity_name]['attrs']
 
     def __init__(self):
         BaseEntityManager.__init__(self)
@@ -19,12 +19,14 @@ class TasksManager(BaseEntityManager):
     def load_items(self, *args, **kwargs):
         return super().load_items(*args, **kwargs)
 
+    def sync_tasks_by_ids(self, ids_list: List) -> Dict:
+        return {task_id: self._get_item_from_api(task_id) for task_id in ids_list}
+
     def _get_items_from_api(self):
         return self._to_dict_by_id(self._extend_tasks(self.api.rest_api.get_tasks()))
 
     def _get_item_from_api(self, _id) -> Dict[str, _entity_type]:
-        ext_task = self._extend_task(self.api.rest_api.get_task(task_id=_id))
-        return {ext_task.id: ext_task}
+        return self._extend_task(self.api.rest_api.get_task(task_id=_id))
 
     def _extend_tasks(self, tasks: Iterable[Task]) -> List[_entity_type]:
         return [self._extend_task(task) for task in tasks]

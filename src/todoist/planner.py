@@ -1,5 +1,5 @@
-from collections import defaultdict
 from datetime import datetime, date
+from collections import defaultdict
 import inspect
 
 from db_worker import DBWorker
@@ -38,6 +38,9 @@ class Planner:
 
                     plan = self._create_plan_from_scratch(horizon, today, tasks)
 
+                else:
+                    logger.info(f'Plan for the {horizon} loaded from the DB')
+
             except ValueError as e:
                 logger.warning(f'A error occurred while loading a plan from the DB: "{e}"')
                 logger.info('Creating a new plan')
@@ -49,15 +52,11 @@ class Planner:
 
         return reports
 
-    def process_task(self, task: ExtendedTask, action: str) -> bool:
+    def process_task(self, task: ExtendedTask, status: str) -> bool:
         """
         Main handler. Decides how to plan the task and saves it to the DB
 
-        :param action: Action, made to the task in Todoist. One of the following:
-                       created
-                       modified
-                       completed
-                       deleted
+        :param status: Last status of a task
         :param task: ExtendedTask object
         :return: action result
         """
@@ -65,7 +64,7 @@ class Planner:
         task_planned = False
 
         for plan in self.plans:
-            task_planned = self.plans[plan].process_task(task, action)
+            task_planned = self.plans[plan].process_task(task, status)
 
         return task_planned
 
@@ -113,27 +112,27 @@ class Plan:
 
         self.task_attrs = config.PLAN_HORIZONS[self.horizon]
 
-    def process_task(self, task: ExtendedTask, action: str) -> bool:
+    def process_task(self, task: ExtendedTask, status: str) -> bool:
 
-        assert action in config.status_transitions, f"Unknown task action '{action}' for task {task.id}"
+        assert status in config.PLANNER_STATUS_TRANSITIONS, f"Unknown task action '{status}' for task {task.id}"
 
         task_fits_the_plan = self._task_fits_the_plan(task)
 
         task_status_log = self.tasks.get(task.id)
-        curr_task_status = task_status_log[-1][0] if task_status_log else 'new'
+        curr_task_status = task_status_log[-1][0] if task_status_log else 'added'
 
-        possible_new_statuses = config.status_transitions[curr_task_status]
+        possible_new_statuses = config.PLANNER_STATUS_TRANSITIONS[curr_task_status]
 
-        if action in ('created', 'loaded') and task_fits_the_plan:
-            assert curr_task_status == 'new', \
-                f'{action.capitalize()} task {task.id} is already present in the plan {self.id}!'
+        if status in ('added', 'loaded') and task_fits_the_plan:
+            assert curr_task_status == 'added', \
+                f'{status.capitalize()} task {task.id} is already present in the plan {self.id}!'
 
             self.add_task_to_plan(task.id, 'planned')
-            logger.info(f'{action.capitalize()} task "{task.content}" ({task.id}) '
+            logger.info(f'{status.capitalize()} task "{task.content}" ({task.id}) '
                         f'is planned to the {self.horizon} plan')
             return True
 
-        if action in ('modified', 'uncompleted'):
+        if status in ('updated', 'uncompleted'):
             if task_fits_the_plan and 'planned' in possible_new_statuses:
                 self.add_task_to_plan(task.id, 'planned')
                 logger.info(f'Task "{task.content}" ({task.id}) is planned to the {self.horizon} plan')
@@ -142,9 +141,9 @@ class Plan:
                 logger.info(f'Task "{task.content}" ({task.id}) is postponed from the {self.horizon} plan')
             return True
 
-        if action in ('deleted', 'completed') and action in possible_new_statuses:
-            self.add_task_to_plan(task.id, action)
-            logger.info(f'Task "{task.content}" ({task.id}) from the {self.horizon} plan is {action}')
+        if status in ('deleted', 'completed') and status in possible_new_statuses:
+            self.add_task_to_plan(task.id, status)
+            logger.info(f'Task "{task.content}" ({task.id}) from the {self.horizon} plan is {status}')
             return True
 
         return False
@@ -240,9 +239,10 @@ class Plan:
     def fill_from_tasks(self, tasks: dict):
         for task_id in tasks:
             task = tasks[task_id]
-            self.process_task(task, 'created')
+            self.process_task(task, 'loaded')
 
     def check_task_by_due_date(self, task: ExtendedTask) -> bool:
+
         if task.due is None:
             return False
 

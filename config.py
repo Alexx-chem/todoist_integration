@@ -26,7 +26,7 @@ DB_CONFIG = {'dbhost': 'localhost',
 TODOIST_SYNC_TIMEOUT = 600  # seconds
 
 TODOIST_DATE_FORMAT = '%Y-%m-%d'
-TODOIST_DATETIME_FORMAT = '%Y-%m-%dT%H:%M:%S:%fZ'
+TODOIST_DATETIME_FORMAT = '%Y-%m-%dT%H:%M:%S.%fZ'
 
 EVENTS_SYNC_FULL_SYNC_PAGES = 52  # One year. One page represents one week according to API docs
 
@@ -42,18 +42,43 @@ PLAN_HORIZONS = {
              'priority': 4}
 }
 
-status_transitions = {
-    'new': ('planned',),
+ENTITY_NAMES_TO_EVENT_OBJECT_TYPES = {
+    'tasks': 'item',
+    'projects': 'project',
+    'sections': 'section',
+    'labels': 'label',
+}
+
+PLANNER_STATUS_TRANSITIONS = {
+    # Todoist statuses
+    'added': ('planned',),
+    'updated': ('planned', 'postponed'),
+    'deleted': (None,),
+    'completed': ('planned', 'deleted'),
+    'uncompleted': ('planned',),
+    # Custom statuses
     'loaded': ('planned',),
     'planned': ('postponed', 'completed', 'deleted'),
     'postponed': ('planned',),
-    'completed': ('planned', 'deleted'),
-    'deleted': (None,)
 }
 
-report_sections_marks = {'completed': '\U00002705',
-                         'not_completed': '\U0000274C',
-                         'postponed': '\U0001F4C6',
-                         'deleted': '\U0001F5D1',
-                         'overall_planned': '\U0001F4CB',
-                         'compl_ratio': '\U0001F4C8'}
+PLANNER_REPORT_SECTIONS_MARKS = {
+    'completed': '\U00002705',
+    'not_completed': '\U0000274C',
+    'postponed': '\U0001F4C6',
+    'deleted': '\U0001F5D1',
+    'overall_planned': '\U0001F4CB',
+    'compl_ratio': '\U0001F4C8'
+}
+
+EVENT_TYPES = [
+    'added',
+    'updated',
+    'deleted',
+    'completed',
+    'uncompleted',
+    'archived',
+    'unarchived',
+    'shared',
+    'left'
+]

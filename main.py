@@ -15,14 +15,18 @@ if __name__ == '__main__':
 
     pipeline = Pipeline()
 
-    # Указывать время в том часовом поясе, в котором код будет работать!
-    job_manager.set_daly_schedule([{'time': "00:05",
+    # Time in local timezone, in which the service is working!
+
+    # In order to let sync happen before plans refresh
+    refresh_delay = config.TODOIST_SYNC_TIMEOUT // 60 + 1
+    job_manager.set_daly_schedule([{'time': f"00:{refresh_delay}",
                                     'func': pipeline.refresh_plans}])
 
     job_manager.get_task_state()
 
+    pipeline.update_by_events()
     pipeline.refresh_plans()
 
     while True:
         sleep(config.TODOIST_SYNC_TIMEOUT)
-        pipeline.sync_all_items()
+        pipeline.update_by_events()

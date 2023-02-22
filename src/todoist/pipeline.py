@@ -1,12 +1,13 @@
+from datetime import datetime
+
 from requests.exceptions import ConnectionError
+from todoist_api_python.models import Due
 
-# DON'T DELETE! These are used in dirty eva(i)l hacks
-from src.todoist.entity_managers import TasksManager, ProjectsManager, SectionsManager, LabelsManager, EventsManager
-
+from src.todoist.entity_managers import get_managers, TasksManager, ProjectsManager, SectionsManager, LabelsManager, EventsManager
 from src.functions import set_db_timezone, send_message_via_bot, save_items_to_db
-from src.todoist.entity_managers import ENTITY_CONFIG
 from src.todoist.planner import Planner
 from src.logger import get_logger
+from src.todoist import init_db
 
 import config
 
@@ -17,39 +18,12 @@ class Pipeline:
 
         self.logger = get_logger(self.__class__.__name__, 'console', config.GLOBAL_LOG_LEVEL)
 
-        self.managers = self._get_managers()
+        self.managers = get_managers()
 
         self.planner = Planner()
 
         if localize_db_timezone:
             set_db_timezone()
-
-    def _get_managers(self):
-        return {entity: self._get_manager_by_entity_name(entity) for entity in ENTITY_CONFIG}
-
-    @staticmethod
-    def _get_manager_by_entity_name(entity_name):
-
-        assert entity_name in ENTITY_CONFIG.keys(), f'Unknown entity name: {entity_name}'
-
-        if entity_name == 'tasks':
-            return TasksManager()
-        if entity_name == 'projects':
-            return ProjectsManager()
-        if entity_name == 'sections':
-            return SectionsManager()
-        if entity_name == 'labels':
-            return LabelsManager()
-        if entity_name == 'events':
-            return EventsManager()
-
-    def _get_current_entity_scope(self, entity_type):
-        self.managers[entity_type].load_items()
-        return self.managers[entity_type].current
-
-    def _get_synced_entity_scope(self, entity_type):
-        self.managers[entity_type].sync_items()
-        return self.managers[entity_type].synced
 
     def refresh_plans(self):
 
@@ -67,7 +41,7 @@ class Pipeline:
 
     @staticmethod
     def _format_report(report, horizon, html=True):
-        report_text = f"Report for {horizon} plan:\n\n\n"
+        report_text = f"{horizon.capitalize()} plan report:\n\n\n"
         if html:
             report_text = "<b>" + report_text + "</b>"
 
@@ -87,6 +61,8 @@ class Pipeline:
         task_manager = self.managers['tasks']
 
         task_manager.load_items()
+        task_manager.sync_items()
+
         events_manager.load_items()
         events_manager.sync_items()
 
@@ -95,40 +71,55 @@ class Pipeline:
         for status in new_last_events_for_tasks:
             events = new_last_events_for_tasks[status]
             if events:
-                if status in ('completed', 'deleted', 'uncompleted', 'updated'):
-                    tasks_to_process = {task_id: task_manager.current[task_id] for task_id in events}
-                    for task_id in tasks_to_process:
-                        # Hoping we never can get an event for deleted task id!
-                        tasks_to_process[task_id].is_deleted = status == 'deleted'
+                tasks_to_update = {}
+                tasks_to_insert = {}
+                for task_id in events:
+                    # Task is new or uncompleted, but so old, that it is not present in the DB
+                    if task_id not in task_manager.current:
+                        task = task_manager.get_item_from_api(task_id)
+                        tasks_to_insert[task_id] = task
 
-                        if status in ('completed', 'uncompleted'):
-                            tasks_to_process[task_id].is_completed = status == 'completed' or \
-                                                          not status == 'uncompleted'
-                    save_items_to_db(entity=task_manager.entity_name,
-                                     attrs=task_manager.attrs,
-                                     items=tasks_to_process,
-                                     save_mode='update')
+                    else:
+                        task = task_manager.synced.get(task_id)
+                        if task is None:
+                            # If the task is not in synced -- it is completed or deleted
+                            task = self.update_current_task_from_events(task_id)
 
-                elif status == 'added':
-                    tasks_to_process = task_manager.sync_tasks_by_ids(events.keys())
-                    save_items_to_db(entity=task_manager.entity_name,
-                                     attrs=task_manager.attrs,
-                                     items=tasks_to_process,
-                                     save_mode='increment')
+                        task.is_deleted = status == 'deleted'
 
-                else:
-                    raise ValueError(f'Unknown task status: {status}')
+                        if status == 'completed':
+                            due = task.due
+                            if due is None or not due.is_recurring:
+                                task.is_completed = True
 
-                save_items_to_db(entity=events_manager.entity_name,
-                                 attrs=events_manager.attrs,
-                                 items=events,
-                                 save_mode='increment')
+                        if status == 'uncompleted':
+                            task.is_completed = False
 
-                for task in tasks_to_process.values():
+                        tasks_to_update[task_id] = task
+
+                    self.logger.debug(f'Passing task {task.id} to planner')
                     self.planner.process_task(task, status)
 
-        self.logger.info(f'Update by events complete. Updated tasks qty: '
-                         f'{sum(len(v) for v in new_last_events_for_tasks.values())}')
+                if tasks_to_update:
+                    save_items_to_db(entity=task_manager.entity_name,
+                                     attrs=task_manager.attrs,
+                                     items=tasks_to_update,
+                                     save_mode='update')
+
+                if tasks_to_insert:
+                    save_items_to_db(entity=task_manager.entity_name,
+                                     attrs=task_manager.attrs,
+                                     items=tasks_to_insert,
+                                     save_mode='increment')
+
+        self.save_new_events_to_db()
+
+        self.logger.info(f'Update by events complete')
+        for status, tasks in new_last_events_for_tasks.items():
+            if len(tasks) > 0:
+                self.logger.info(f'{status}:')
+                for task in tasks.values():
+                    self.logger.info(f'   {task.id}: {task.extra_data["content"]}')
 
     def load_all_items(self):
         for entity_name in self.managers:
@@ -145,7 +136,9 @@ class Pipeline:
             manager.sync_items()
 
     def process_diff(self):
-        # TODO Rework needed
+        """
+        Legacy. Maybe not needed
+        """
 
         task_to_action_map = []
 
@@ -193,7 +186,8 @@ class Pipeline:
             else:
                 task = synced_tasks[task_id]
 
-            self.planner.process_task(task, action)
+            task_planned = self.planner.process_task(task, action)
+            self.logger.debug(f'Task {"is" if task_planned else "is not"} planned')
 
     def _get_tasks_diff(self, common_task_ids):
 
@@ -204,3 +198,47 @@ class Pipeline:
                 res.add(task_id)
 
         return res
+
+    def save_new_events_to_db(self):
+        events_manager = self.managers['events']
+        if events_manager.new:
+            save_items_to_db(entity=events_manager.entity_name,
+                             attrs=events_manager.attrs,
+                             items=events_manager.new,
+                             save_mode='increment')
+
+    def update_current_task_from_events(self, task_id):
+        self.managers['events'].sync_items()
+        task_events = self.managers['events'].synced_by_object_id(task_id)
+        task_events.sort(key=lambda x: x.event_date)
+
+        known_task_state = self.managers['tasks'].current[task_id]
+        for event in task_events:
+            for attr in ('content', 'due_date', 'description'):
+                if event.extra_data.get(f'last_{attr}') is not None:
+                    if attr == 'due_date':
+                        event_datetime_str = event.extra_data.get(attr)
+                        if event_datetime_str is None:
+                            due = None
+                        else:
+                            event_datetime = datetime.strptime(event_datetime_str, config.TODOIST_DATETIME_FORMAT)
+                            event_date_str = event_datetime.date().strftime(config.TODOIST_DATE_FORMAT)
+                            due = Due(date=event_date_str,
+                                      string='',
+                                      datetime=event_datetime_str,
+                                      is_recurring=False)
+                        known_task_state.due = due
+                    else:
+                        known_task_state.__dict__[attr] = event.extra_data[attr]
+
+        return known_task_state
+
+    def init_db(self):
+        self.create_tables_if_not_exist()
+        self.fill_tables_if_empty()
+
+    def create_tables_if_not_exist(self):
+        pass
+
+    def fill_tables_if_empty(self):
+        init_db.fill_item_tables_from_scratch(managers=self.managers, check=True)

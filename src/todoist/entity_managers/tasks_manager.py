@@ -16,9 +16,6 @@ class TasksManager(BaseEntityManager):
     def __init__(self):
         BaseEntityManager.__init__(self)
 
-    def load_items(self, *args, **kwargs):
-        return super().load_items(*args, **kwargs)
-
     def sync_tasks_by_ids(self, ids_list: List) -> Dict:
         return {task_id: self._get_item_from_api(task_id) for task_id in ids_list}
 

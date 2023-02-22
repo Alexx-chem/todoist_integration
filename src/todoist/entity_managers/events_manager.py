@@ -21,13 +21,10 @@ class EventsManager(BaseEntityManager):
     def __init__(self):
         BaseEntityManager.__init__(self)
 
-    def load_items(self, *args, **kwargs):
-        return super().load_items(*args, **kwargs)
-
     def _get_item_from_api(self, _id: str) -> Dict:
         return super()._get_item_from_api(_id=_id)
 
-    def _get_items_from_api(self, request_limit: int = 20) -> Dict:
+    def _get_items_from_api(self, request_limit: int = 100) -> Dict:
 
         # This is dumb! requests.get does not work! But curl does.
         # request_limit=100 is the max value for one page.
@@ -50,12 +47,10 @@ class EventsManager(BaseEntityManager):
                     self.logger.error(f'Failed to get events from activity page object: {activity_page}')
 
                 max_offset_steps = activity_page['count'] // request_limit
-                oldest_offset_event_dt = datetime.strptime(events_list_full[-1]['event_date'], config.TODOIST_DATETIME_FORMAT)
+                oldest_offset_event_dt = datetime.strptime(events_list_full[-1]['event_date'],
+                                                           config.TODOIST_DATETIME_FORMAT)
                 if max_offset_steps == offset_step or oldest_offset_event_dt <= last_known_event_dt:
                     break
-
-                if activity_page['count'] > 40:
-                    request_limit = 100
 
                 offset_step += 1
 
@@ -75,7 +70,7 @@ class EventsManager(BaseEntityManager):
         last_event_datetime_db = DBWorker.select('select event_date from events '
                                                  'order by event_date desc limit 1', fetch='one')
         if not last_event_datetime_db:
-            return None
+            return datetime.now() - timedelta(weeks=config.EVENTS_SYNC_FULL_SYNC_PAGES)
 
         return last_event_datetime_db[0]
 
@@ -161,3 +156,9 @@ class EventsManager(BaseEntityManager):
     @property
     def new_last_for_item_by_date(self) -> Dict:
         return self._get_last_event_for_object_by_event_type(self.new)
+
+    def current_by_object_id(self, object_id: str) -> List:
+        return [event for event in self.current.values() if event.object_id == object_id]
+
+    def synced_by_object_id(self, object_id: str) -> List:
+        return [event for event in self.synced.values() if event.object_id == object_id]

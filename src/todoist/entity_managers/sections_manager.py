@@ -13,9 +13,6 @@ class SectionsManager(BaseEntityManager):
     def __init__(self):
         BaseEntityManager.__init__(self)
 
-    def load_items(self, *args, **kwargs):
-        return super().load_items(*args, **kwargs)
-
     def _get_item_from_api(self, _id: str) -> Dict:
         item = self.api.rest_api.get_section(section_id=_id)
         return {item.id: item}

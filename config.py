@@ -53,9 +53,11 @@ PLANNER_STATUS_TRANSITIONS = {
     # Todoist statuses
     'added': ('planned',),
     'updated': ('planned', 'postponed'),
-    'deleted': (None,),
-    'completed': ('planned', 'deleted'),
-    'uncompleted': ('planned',),
+    'deleted': ('deleted',),
+    # if completed task is recurring  -- it will be counted as completed, and rescheduled as modified one
+    'completed': ('planned', 'completed', 'postponed'),
+    'uncompleted': ('planned', 'postponed'),
+
     # Custom statuses
     'loaded': ('planned',),
     'planned': ('postponed', 'completed', 'deleted'),

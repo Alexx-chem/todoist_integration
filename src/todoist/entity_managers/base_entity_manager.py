@@ -26,8 +26,6 @@ class BaseEntityManager:
         if self.api is None:
             self.api = TodoistApi(config.TODOIST_API_TOKEN)
 
-        self.load_items()
-
     @property
     def attrs(self):
         return self._attrs
@@ -40,7 +38,6 @@ class BaseEntityManager:
     def entity_type(self):
         return self._entity_type
 
-    @abstractmethod
     def load_items(self, *args, **kwargs):
         self.logger.debug(f'{inspect.currentframe().f_code.co_name} called')
 
@@ -51,10 +48,10 @@ class BaseEntityManager:
 
         self._synced_items = self._get_items_from_api(*args, **kwargs)
 
-    def load_item_by_id(self, item_id: str) -> Dict[str, _entity_type]:
+    def get_item_from_db(self, item_id: str) -> Dict[str, _entity_type]:
         return self._get_item_from_db(item_id)
 
-    def sync_item_by_id(self, item_id: str) -> Dict[str, _entity_type]:
+    def get_item_from_api(self, item_id: str) -> Dict[str, _entity_type]:
         return self._get_item_from_api(item_id)
 
     @abstractmethod

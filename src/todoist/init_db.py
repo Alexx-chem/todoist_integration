@@ -1,10 +1,15 @@
-from src.functions import _prepare_values, save_items_to_db
+from src.functions import save_items_to_db
 from .entity_managers import ENTITY_CONFIG
 from db_worker import DBWorker
 
+
+from src.logger import get_logger
 import config
 
 DBWorker.set_config(config.DB_CONFIG)
+
+logger = get_logger(__name__, 'console', logging_level=config.GLOBAL_LOG_LEVEL)
+
 
 CREATE_QUERIES = {'plans': 'CREATE TABLE public."plans" ('
                            'id int4 NOT NULL DEFAULT nextval(\'plan_id_seq\'::regclass), '
@@ -49,13 +54,31 @@ def create_tables():
 
 def init_system_params():
     DBWorker.input("INSERT INTO system_params param VALUES ('tables_created'),"
-                   "                                       ('initial_tables_fill_complete'),"
-                   "                                       ('')")
+                   "                                       ('initial_tables_fill_complete')")
 
 
-def fill_item_tables():
-    attrs = ENTITY_CONFIG[entity]["attrs"]
-    save_items_to_db(entity, items)
+def fill_item_tables_from_scratch(managers, check=True):
+    logger.debug('Filling tables')
+    if check:
+        tables_filled = DBWorker.select("SELECT value FROM system_params WHERE param = 'initial_tables_fill_complete'",
+                                        fetch='one')
+        if tables_filled[0] == 'true':
+            logger.debug('Tables already filled')
+            return True
+
+    for entity in ENTITY_CONFIG:
+        attrs = ENTITY_CONFIG[entity]["attrs"]
+
+        managers[entity].sync_items()
+        items = managers[entity].synced
+
+        save_items_to_db(entity, attrs, items, save_mode='delete_all')
+
+    DBWorker.input("UPDATE system_params SET value = 'true' WHERE param = 'initial_tables_fill_complete'")
+
+    logger.debug('Tables filled!')
+
+    return True
 
 
 if __name__ == '__main__':

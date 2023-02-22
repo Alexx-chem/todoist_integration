@@ -7,10 +7,13 @@ import requests
 import json
 
 import config
+from src.logger import get_logger
 
 from db_worker import DBWorker
 
 DBWorker.set_config(config.DB_CONFIG)
+
+logger = get_logger(__name__, 'console', logging_level=config.GLOBAL_LOG_LEVEL)
 
 
 def threaded(fn):
@@ -178,9 +181,8 @@ def _update_items_in_db(entity, attrs, items):
     query = f'UPDATE {entity} SET "{attrs_joined} WHERE id='
 
     for item in items.values():
-        # FIXME hack with indexing
         query += f"'{item.id}'"
-        values = _prepare_values(attrs=attrs, items={item.id: item})[0]
+        values = _prepare_values(attrs=attrs, items={item.id: item})[0]  # FIXME hack with indexing
         DBWorker.input(query, data=values)
 
 

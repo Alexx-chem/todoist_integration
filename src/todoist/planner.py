@@ -10,14 +10,13 @@ import config
 from src.logger import get_logger
 
 
-logger = get_logger(__name__, 'console', config.GLOBAL_LOG_LEVEL)
-
-
 class Planner:
 
     def __init__(self):
 
         self.plans = {}
+
+        self.logger = get_logger(self.__class__.__name__, 'console', config.GLOBAL_LOG_LEVEL)
 
     def refresh_plans(self, tasks):
         today = get_today()
@@ -30,7 +29,7 @@ class Planner:
                 plan = Plan.get_active_by_horizon(horizon=horizon)
 
                 if plan.end < today:
-                    logger.info(f'Plan for the {horizon} is outdated! Creating a report and a new plan')
+                    self.logger.info(f'Plan for the {horizon} is outdated! Creating a report and a new plan')
                     
                     reports[horizon] = plan.report()
 
@@ -39,11 +38,11 @@ class Planner:
                     plan = self._create_plan_from_scratch(horizon, today, tasks)
 
                 else:
-                    logger.info(f'Plan for the {horizon} loaded from the DB')
+                    self.logger.info(f'Plan for the {horizon} loaded from the DB')
 
             except ValueError as e:
-                logger.warning(f'A error occurred while loading a plan from the DB: "{e}"')
-                logger.info('Creating a new plan')
+                self.logger.warning(f'A error occurred while loading a plan from the DB: "{e}"')
+                self.logger.info('Creating a new plan')
 
                 Plan.set_inactive_by_horizon(horizon)
                 plan = self._create_plan_from_scratch(horizon, today, tasks)
@@ -63,14 +62,17 @@ class Planner:
 
         task_planned = False
 
-        for plan in self.plans:
-            task_planned = self.plans[plan].process_task(task, status)
+        for horizon in self.plans:
+            self.logger.debug(f'Calling {horizon} task processing')
+            try:
+                task_planned = self.plans[horizon].process_task(task, status) or task_planned
+            except AssertionError as e:
+                self.logger.warning(e)
 
         return task_planned
 
-    @staticmethod
-    def _create_plan_from_scratch(horizon, start, current_tasks):
-        logger.debug(inspect.currentframe().f_code.co_name)
+    def _create_plan_from_scratch(self, horizon, start, current_tasks):
+        self.logger.debug(inspect.currentframe().f_code.co_name)
         plan = Plan.create(horizon=horizon, active=True, start=start)
         plan.fill_from_tasks(current_tasks)
         return plan
@@ -112,14 +114,20 @@ class Plan:
 
         self.task_attrs = config.PLAN_HORIZONS[self.horizon]
 
+        self.logger = get_logger(f'{self.__class__.__name__} ({self.horizon})', 'console', config.GLOBAL_LOG_LEVEL)
+
     def process_task(self, task: ExtendedTask, status: str) -> bool:
 
         assert status in config.PLANNER_STATUS_TRANSITIONS, f"Unknown task action '{status}' for task {task.id}"
 
+        self.logger.debug(f'Processing task {task.id}: {task.content[:20]} for the {self.horizon} plan')
+
         task_fits_the_plan = self._task_fits_the_plan(task)
+        self.logger.debug('Task fits the plan' if task_fits_the_plan else "Task doesn't fit the plan")
 
         task_status_log = self.tasks.get(task.id)
         curr_task_status = task_status_log[-1][0] if task_status_log else 'added'
+        self.logger.debug(f'Current task status: {curr_task_status}')
 
         possible_new_statuses = config.PLANNER_STATUS_TRANSITIONS[curr_task_status]
 
@@ -127,23 +135,34 @@ class Plan:
             assert curr_task_status == 'added', \
                 f'{status.capitalize()} task {task.id} is already present in the plan {self.id}!'
 
-            self.add_task_to_plan(task.id, 'planned')
-            logger.info(f'{status.capitalize()} task "{task.content}" ({task.id}) '
-                        f'is planned to the {self.horizon} plan')
+            plan_status = 'planned'
+            if task.is_completed:
+                plan_status = 'completed'
+            if task.is_deleted:
+                plan_status = 'deleted'
+
+            self.add_task_to_plan(task.id, plan_status)
+            self.logger.info(f'{status.capitalize()} task {task.id} is planned to the {self.horizon} plan')
             return True
 
-        if status in ('updated', 'uncompleted'):
-            if task_fits_the_plan and 'planned' in possible_new_statuses:
-                self.add_task_to_plan(task.id, 'planned')
-                logger.info(f'Task "{task.content}" ({task.id}) is planned to the {self.horizon} plan')
+        if status in ('updated', 'uncompleted', 'completed'):
+            if task_fits_the_plan:
+                if 'planned' in possible_new_statuses:
+                    self.add_task_to_plan(task.id, 'planned')
+                    self.logger.info(f'Task {task.id} is planned to the {self.horizon} plan')
+                elif 'completed' in possible_new_statuses:
+                    self.add_task_to_plan(task.id, 'completed')
+                    self.logger.info(f'Task {task.id} from the {self.horizon} plan is completed')
+
             elif 'postponed' in possible_new_statuses:
                 self.add_task_to_plan(task.id, 'postponed')
-                logger.info(f'Task "{task.content}" ({task.id}) is postponed from the {self.horizon} plan')
+                self.logger.info(f'Task {task.id} is postponed from the {self.horizon} plan')
+
             return True
 
-        if status in ('deleted', 'completed') and status in possible_new_statuses:
+        if status == 'deleted' and status in possible_new_statuses:
             self.add_task_to_plan(task.id, status)
-            logger.info(f'Task "{task.content}" ({task.id}) from the {self.horizon} plan is {status}')
+            self.logger.info(f'Task {task.id} from the {self.horizon} plan is {status}')
             return True
 
         return False
@@ -247,12 +266,13 @@ class Plan:
             return False
 
         due_date = datetime.strptime(task.due.date, config.TODOIST_DATE_FORMAT).date()
-        return self.start <= due_date <= self.end
+        return due_date <= self.end
 
     def add_task_to_plan(self, task_id, status):
-        record_id, timestamp = DBWorker.input(f"insert into tasks_in_plans (task_id, status, timestamp, plan_id)"
-                                              f"values ('{task_id}', '{status}', current_timestamp, {self.id})"
-                                              f"returning record_id, timestamp")
+        self.logger.debug(f'Task {task_id} is added to the {self.horizon} plan as "{status}"')
+        timestamp = DBWorker.input(f"insert into tasks_in_plans (task_id, status, timestamp, plan_id)"
+                                   f"values ('{task_id}', '{status}', current_timestamp, {self.id})"
+                                   f"returning timestamp")
 
         self.tasks[task_id].append((status, timestamp))
 
@@ -290,12 +310,12 @@ class Plan:
         except ZeroDivisionError:
             completion_ratio = 0
 
-        report = {'completed': f"{qty_completed} completed tasks",
-                  'not_completed': f"{qty_planned} not completed planned tasks",
-                  'postponed': f"{qty_postponed} postponed tasks",
-                  'deleted': f"{qty_deleted} deleted tasks",
-                  'overall_planned': f"{qty_overall_planned} overall planned tasks",
-                  'compl_ratio': f"{'{:.2f}'.format(completion_ratio)}% completion ratio"}
+        report = {'completed': f"Completed:\n{qty_completed} ",
+                  'not_completed': f"Not completed:\n{qty_planned} ",
+                  'postponed': f"Postponed:\n{qty_postponed} ",
+                  'deleted': f"Deleted:\n{qty_deleted}",
+                  'overall_planned': f"Overall planned:\n{qty_overall_planned} ",
+                  'compl_ratio': f"Completion ratio:\n{'{:.2f}'.format(completion_ratio)}%"}
 
         return report
 

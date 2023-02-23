@@ -51,19 +51,14 @@ ENTITY_NAMES_TO_EVENT_OBJECT_TYPES = {
 
 TODOIST_TASK_CONTENT_LEN_THRESHOLD = 50
 
-PLANNER_STATUS_TRANSITIONS = {
-    # Todoist statuses
+PLANNER_TASK_STATUS_TRANSITIONS = {
     'added': ('planned',),
-    'updated': ('planned', 'postponed'),
-    'deleted': ('deleted',),
-    # if completed task is recurring  -- it will be counted as completed, and rescheduled as modified one
-    'completed': ('planned', 'completed', 'postponed'),
-    'uncompleted': ('planned', 'postponed'),
-
-    # Custom statuses
     'loaded': ('planned',),
-    'planned': ('postponed', 'completed', 'deleted'),
-    'postponed': ('planned',),
+    # if completed task is recurring  -- it will be accounted as completed, and rescheduled as modified one
+    'completed': ('planned', 'postponed', 'deleted'),
+    'planned': ('completed', 'postponed', 'deleted'),
+    'postponed': ('planned', 'completed', 'deleted'),
+    'completed_recurring': ('planned', 'completed', 'postponed', 'deleted')
 }
 
 PLANNER_REPORT_SECTIONS_MARKS = {

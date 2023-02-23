@@ -82,23 +82,14 @@ class Pipeline:
 
                     else:
                         task = task_manager.synced.get(task_id)
+
                         if task is None:
                             # If the task is not in synced -- it is completed or deleted
                             task = self.update_current_task_from_events(task_id)
 
-                        task.is_deleted = status == 'deleted'
-
-                        if status == 'completed':
-                            due = task.due
-                            if due is None or not due.is_recurring:
-                                task.is_completed = True
-
-                        if status == 'uncompleted':
-                            task.is_completed = False
-
                         tasks_to_update[task_id] = task
 
-                    logger.debug(f'{self._log_prefix} - Passing task {task.id} to planner')
+                    logger.debug(f'{self._log_prefix} - Passing {status} task {task.id} to the Planner')
                     self.planner.process_task(task, status)
 
                 if tasks_to_update:
@@ -213,8 +204,20 @@ class Pipeline:
         task_events = self.managers['events'].synced_by_object_id(task_id)
         task_events.sort(key=lambda x: x.event_date)
 
-        known_task_state = self.managers['tasks'].current[task_id]
+        task = self.managers['tasks'].current[task_id]
         for event in task_events:
+            if event.event_type == 'completed':
+                task.is_completed = True
+                return task
+
+            if event.event_type == 'deleted':
+                task.is_deleted = True
+                return task
+
+            if event.event_type == 'uncompleted':
+                task.is_completed = False
+                return task
+
             for attr in ('content', 'due_date', 'description'):
                 if event.extra_data.get(f'last_{attr}') is not None:
                     if attr == 'due_date':
@@ -228,11 +231,11 @@ class Pipeline:
                                       string='',
                                       datetime=event_datetime_str,
                                       is_recurring=False)
-                        known_task_state.due = due
+                        task.due = due
                     else:
-                        known_task_state.__dict__[attr] = event.extra_data[attr]
+                        task.__dict__[attr] = event.extra_data[attr]
 
-        return known_task_state
+        return task
 
     def init_db(self):
         self.create_tables_if_not_exist()

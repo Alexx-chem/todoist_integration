@@ -206,34 +206,33 @@ class Pipeline:
 
         task = self.managers['tasks'].current[task_id]
         for event in task_events:
-            if event.event_type == 'completed':
-                task.is_completed = True
-                return task
-
             if event.event_type == 'deleted':
                 task.is_deleted = True
                 return task
 
+            if event.event_type == 'completed':
+                task.is_completed = True
+
             if event.event_type == 'uncompleted':
                 task.is_completed = False
-                return task
 
-            for attr in ('content', 'due_date', 'description'):
-                if event.extra_data.get(f'last_{attr}') is not None:
-                    if attr == 'due_date':
-                        event_datetime_str = event.extra_data.get(attr)
-                        if event_datetime_str is None:
-                            due = None
+            if event.event_type == 'updated':
+                for attr in ('content', 'due_date', 'description'):
+                    if event.extra_data.get(f'last_{attr}') is not None:
+                        if attr == 'due_date':
+                            event_datetime_str = event.extra_data.get(attr)
+                            if event_datetime_str is None:
+                                due = None
+                            else:
+                                event_datetime = datetime.strptime(event_datetime_str, config.TODOIST_DATETIME_FORMAT)
+                                event_date_str = event_datetime.date().strftime(config.TODOIST_DATE_FORMAT)
+                                due = Due(date=event_date_str,
+                                          string='',
+                                          datetime=event_datetime_str,
+                                          is_recurring=False)
+                            task.due = due
                         else:
-                            event_datetime = datetime.strptime(event_datetime_str, config.TODOIST_DATETIME_FORMAT)
-                            event_date_str = event_datetime.date().strftime(config.TODOIST_DATE_FORMAT)
-                            due = Due(date=event_date_str,
-                                      string='',
-                                      datetime=event_datetime_str,
-                                      is_recurring=False)
-                        task.due = due
-                    else:
-                        task.__dict__[attr] = event.extra_data[attr]
+                            task.__dict__[attr] = event.extra_data[attr]
 
         return task
 

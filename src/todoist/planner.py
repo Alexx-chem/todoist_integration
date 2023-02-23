@@ -186,7 +186,7 @@ class Plan:
             logger.info(f'{self._log_prefix} - Task {task.id} from the {self.horizon} plan is {status}')
             return True
 
-        logger.debug(f'{self._log_prefix} - Task {task.id} state for the {self.horizon} plan is not changed')
+        logger.debug(f'{self._log_prefix} - Task {task.id} state for the {self.horizon} plan was not changed')
         return False
 
     @classmethod
@@ -288,7 +288,7 @@ class Plan:
             return False
 
         due_date = datetime.strptime(task.due.date, config.TODOIST_DATE_FORMAT).date()
-        return due_date <= self.end
+        return due_date <= self.end and not (task.is_completed or task.is_deleted)
 
     def add_task_to_plan(self, task_id, status):
         logger.debug(f'{self._log_prefix} - Task {task_id} is added to the {self.horizon} plan as "{status}"')

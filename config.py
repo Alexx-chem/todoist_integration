@@ -49,6 +49,8 @@ ENTITY_NAMES_TO_EVENT_OBJECT_TYPES = {
     'labels': 'label',
 }
 
+TODOIST_TASK_CONTENT_LEN_THRESHOLD = 50
+
 PLANNER_STATUS_TRANSITIONS = {
     # Todoist statuses
     'added': ('planned',),

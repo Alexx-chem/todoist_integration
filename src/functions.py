@@ -1,7 +1,7 @@
 from datetime import datetime, date, timedelta
 from typing import Union, Dict, List
-from threading import Thread
 from psycopg2.extras import Json
+from threading import Thread
 import traceback
 import requests
 import json
@@ -198,3 +198,10 @@ def convert_to_json_if_dict(attr_value):
         attr_value = Json(attr_value, dumps=lambda x: json.dumps(x, ensure_ascii=False))
 
     return attr_value
+
+
+def recurring_task_analyzer():
+    # Good luck to me!:)
+    pass
+
+

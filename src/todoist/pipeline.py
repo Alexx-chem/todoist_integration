@@ -3,24 +3,25 @@ from datetime import datetime
 from requests.exceptions import ConnectionError
 from todoist_api_python.models import Due
 
-from src.todoist.entity_managers import get_managers, TasksManager, ProjectsManager, SectionsManager, LabelsManager, EventsManager
 from src.functions import set_db_timezone, send_message_via_bot, save_items_to_db
+from src.todoist.entity_managers import get_managers
 from src.todoist.planner import Planner
 from src.logger import get_logger
 from src.todoist import init_db
 
 import config
 
+logger = get_logger(__name__, 'console', logging_level=config.GLOBAL_LOG_LEVEL)
+
 
 class Pipeline:
 
     def __init__(self, localize_db_timezone: bool = True):
 
-        self.logger = get_logger(self.__class__.__name__, 'console', config.GLOBAL_LOG_LEVEL)
-
         self.managers = get_managers()
-
         self.planner = Planner()
+
+        self._log_prefix = self.__class__.__name__
 
         if localize_db_timezone:
             set_db_timezone()
@@ -31,13 +32,13 @@ class Pipeline:
         delete_previous = True
         for horizon in reports:
             report_text = self._format_report(reports[horizon], horizon)
-            self.logger.info(report_text)
-            self.logger.info('Sending message via bot')
+            logger.info(f'{self._log_prefix} - {report_text}')
+            logger.info(f'{self._log_prefix} -Sending message via bot')
             try:
                 response = send_message_via_bot(report_text, delete_previous=delete_previous)
-                self.logger.info(f'Message sent, response code: {response.status_code}')
+                logger.info(f'{self._log_prefix} - Message sent, response code: {response.status_code}')
             except ConnectionError as e:
-                self.logger.error(f'Failed to send a message via bot: {e}')
+                logger.error(f'{self._log_prefix} - Failed to send a message via bot: {e}')
 
     @staticmethod
     def _format_report(report, horizon, html=True):
@@ -97,7 +98,7 @@ class Pipeline:
 
                         tasks_to_update[task_id] = task
 
-                    self.logger.debug(f'Passing task {task.id} to planner')
+                    logger.debug(f'{self._log_prefix} - Passing task {task.id} to planner')
                     self.planner.process_task(task, status)
 
                 if tasks_to_update:
@@ -114,12 +115,12 @@ class Pipeline:
 
         self.save_new_events_to_db()
 
-        self.logger.info(f'Update by events complete')
+        logger.info(f'{self._log_prefix} - Update by events complete')
         for status, tasks in new_last_events_for_tasks.items():
             if len(tasks) > 0:
-                self.logger.info(f'{status}:')
+                logger.info(f'{status}:')
                 for task in tasks.values():
-                    self.logger.info(f'   {task.id}: {task.extra_data["content"]}')
+                    logger.info(f'   {task.id}: {task.extra_data["content"]}')
 
     def load_all_items(self):
         for entity_name in self.managers:
@@ -129,7 +130,7 @@ class Pipeline:
         try:
             self.managers[entity_name].load_items()
         except Exception as e:
-            self.logger.error(f'DB error. {e}')
+            logger.error(f'{self._log_prefix} - DB error. {e}')
 
     def sync_all_items(self):
         for manager in self.managers.values():
@@ -149,12 +150,12 @@ class Pipeline:
 
         # Completed tasks
         completed_task_ids = current_tasks.keys() & new_events['completed'].keys()
-        self.logger.debug(f'completed_task_ids {completed_task_ids}')
+        logger.debug(f'{self._log_prefix} - completed_task_ids {completed_task_ids}')
         task_to_action_map.extend([(task_id, 'completed') for task_id in completed_task_ids])
 
         # Deleted tasks
         deleted_task_ids = (current_tasks.keys() - synced_tasks.keys()) & new_events['deleted'].keys()
-        self.logger.debug(f'deleted_task_ids {deleted_task_ids}')
+        logger.debug(f'{self._log_prefix} - deleted_task_ids {deleted_task_ids}')
         task_to_action_map.extend([(task_id, 'deleted') for task_id in deleted_task_ids])
 
         # Tasks present only in synced scope, not in local
@@ -162,12 +163,12 @@ class Pipeline:
 
         # Newly created tasks
         new_task_ids = new_and_uncompleted_task_ids & new_events['added'].keys()
-        self.logger.debug(f'new_task_ids {new_task_ids}')
+        logger.debug(f'{self._log_prefix} - new_task_ids {new_task_ids}')
         task_to_action_map.extend([(task_id, 'created') for task_id in new_task_ids])
 
         # Uncompleted tasks
         uncompleted_task_ids = new_and_uncompleted_task_ids & new_events['uncompleted'].keys()
-        self.logger.debug(f'uncompleted_task_ids {uncompleted_task_ids}')
+        logger.debug(f'{self._log_prefix} - uncompleted_task_ids {uncompleted_task_ids}')
         task_to_action_map.extend([(task_id, 'uncompleted') for task_id in uncompleted_task_ids])
 
         # Tasks, present in both synced and local scopes
@@ -175,7 +176,7 @@ class Pipeline:
 
         # Tasks, modified in comparison
         modified_tasks = self._get_tasks_diff(common_task_ids)
-        self.logger.debug(f'modified_tasks: {modified_tasks}')
+        logger.debug(f'{self._log_prefix} - modified_tasks: {modified_tasks}')
 
         task_to_action_map.extend([(task_id, 'modified') for task_id in modified_tasks])
 
@@ -187,7 +188,7 @@ class Pipeline:
                 task = synced_tasks[task_id]
 
             task_planned = self.planner.process_task(task, action)
-            self.logger.debug(f'Task {"is" if task_planned else "is not"} planned')
+            logger.debug(f'{self._log_prefix} - Task {"is" if task_planned else "is not"} planned')
 
     def _get_tasks_diff(self, common_task_ids):
 

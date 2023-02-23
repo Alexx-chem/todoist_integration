@@ -2,7 +2,7 @@ from typing import Iterable, List, Dict
 from todoist_api_python.models import Task
 from time import sleep
 
-from .base_entity_manager import BaseEntityManager
+from .base_entity_manager import BaseEntityManager, logger
 from src.todoist import ExtendedTask
 from . import ENTITY_CONFIG
 
@@ -51,7 +51,7 @@ class TasksManager(BaseEntityManager):
         try:
             return self.api.sync_api.items_archive.for_project(project_id).items()
         except ConnectionError as e:
-            self.logger.error(f'Sync error. {e}')
+            logger.error(f'{self._logger_prefix} - Sync error. {e}')
             return []
 
     @staticmethod
@@ -78,7 +78,7 @@ class TasksManager(BaseEntityManager):
             if old_property_value != new_property_value:
                 if property_key == 'due':
                     if self._due_same_except_string(old_property_value, new_property_value):
-                        self.logger.debug(f'due.string changed: {current_task.content}')
+                        logger.debug(f'{self._logger_prefix} - due.string changed: {current_task.content}')
                         continue
 
                 res[property_key] = {'old': old_property_value,

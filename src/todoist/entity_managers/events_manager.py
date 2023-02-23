@@ -6,7 +6,7 @@ import os
 
 from db_worker import DBWorker
 
-from .base_entity_manager import BaseEntityManager
+from .base_entity_manager import BaseEntityManager, logger
 from src.todoist.entity_classes import Event
 from . import ENTITY_CONFIG
 import config
@@ -44,7 +44,8 @@ class EventsManager(BaseEntityManager):
                 try:
                     events_list_full.extend(events_list)
                 except KeyError:
-                    self.logger.error(f'Failed to get events from activity page object: {activity_page}')
+                    logger.error(f'{self._logger_prefix} - Failed to get events '
+                                 f'from activity page object: {activity_page}')
 
                 max_offset_steps = activity_page['count'] // request_limit
                 oldest_offset_event_dt = datetime.strptime(events_list_full[-1]['event_date'],

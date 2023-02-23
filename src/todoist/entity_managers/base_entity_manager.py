@@ -10,6 +10,8 @@ from src.logger import get_logger
 
 import config
 
+logger = get_logger(__name__, 'console', logging_level=config.GLOBAL_LOG_LEVEL)
+
 
 class BaseEntityManager:
     _entity_name = None
@@ -18,10 +20,11 @@ class BaseEntityManager:
     api = None
 
     def __init__(self):
-        self.logger = get_logger(self.__class__.__name__, 'console', config.GLOBAL_LOG_LEVEL)
 
         self._current_items: Union[Dict, None] = None
         self._synced_items: Union[Dict, None] = None
+
+        self._logger_prefix = self.__class__.__name__
 
         if self.api is None:
             self.api = TodoistApi(config.TODOIST_API_TOKEN)
@@ -39,12 +42,12 @@ class BaseEntityManager:
         return self._entity_type
 
     def load_items(self, *args, **kwargs):
-        self.logger.debug(f'{inspect.currentframe().f_code.co_name} called')
+        logger.debug(f'{self._logger_prefix} - {inspect.currentframe().f_code.co_name} called')
 
         self._current_items = self._get_items_from_db()
 
     def sync_items(self, *args, **kwargs):
-        self.logger.debug(f'{inspect.currentframe().f_code.co_name} called')
+        logger.debug(f'{self._logger_prefix} - {inspect.currentframe().f_code.co_name} called')
 
         self._synced_items = self._get_items_from_api(*args, **kwargs)
 

@@ -142,7 +142,7 @@ class Plan:
             # If task is deleted -- it can't be planned (and in fact should not get here again)
             return False
 
-        possible_new_statuses = config.PLANNER_TASK_STATUS_TRANSITIONS.get(curr_task_status, ())
+        possible_new_statuses = config.PLANNER_TASK_STATUS_TRANSITIONS.get(curr_task_status, ('planned',))
 
         if status in ('added', 'loaded') and task_fits_the_plan:
             assert curr_task_status is None, \
@@ -169,13 +169,13 @@ class Plan:
                             f'from the {self.horizon} plan is completed')
 
             if task_fits_the_plan:
-                if 'planned' in possible_new_statuses and not task.is_completed:
+                if 'planned' in possible_new_statuses and not (task.is_completed or task.is_deleted):
                     self.add_task_to_plan(task.id, 'planned')
                     logger.info(f'{self._log_prefix} - Task {task.id} is planned to the {self.horizon} plan')
                 elif 'completed' in possible_new_statuses and task.is_completed:
                     self.add_task_to_plan(task.id, 'completed')
                     logger.info(f'{self._log_prefix} - Task {task.id} from the {self.horizon} plan is completed')
-            elif 'postponed' in possible_new_statuses and not task.is_completed and not task_is_recurring:
+            elif 'postponed' in possible_new_statuses and not (task.is_completed or task_is_recurring):
                 self.add_task_to_plan(task.id, 'postponed')
                 logger.info(f'{self._log_prefix} - Task {task.id} is postponed from the {self.horizon} plan')
 
@@ -288,7 +288,7 @@ class Plan:
             return False
 
         due_date = datetime.strptime(task.due.date, config.TODOIST_DATE_FORMAT).date()
-        return due_date <= self.end and not (task.is_completed or task.is_deleted)
+        return due_date <= self.end
 
     def add_task_to_plan(self, task_id, status):
         logger.debug(f'{self._log_prefix} - Task {task_id} is added to the {self.horizon} plan as "{status}"')

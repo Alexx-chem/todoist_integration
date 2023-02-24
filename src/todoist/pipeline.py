@@ -77,9 +77,14 @@ class Pipeline:
                 for task_id in events:
                     # Task is new or uncompleted, but so old, that it is not present in the DB
                     if task_id not in task_manager.current:
+                        logger.debug(f"Task {task_id} is not in current tasks")
                         task = task_manager.get_item_from_api(task_id)
-                        tasks_to_insert[task_id] = task
-
+                        if task is not None:
+                            tasks_to_insert[task_id] = task
+                        else:
+                            logger.warning(f"Task {task_id} can't be processed, because it was completed or deleted, "
+                                           f"and it is too old to be in current tasks. Skipping")
+                            continue
                     else:
                         task = task_manager.synced.get(task_id)
 
@@ -106,12 +111,12 @@ class Pipeline:
 
         self.save_new_events_to_db()
 
-        logger.info(f'{self._log_prefix} - Update by events complete')
+        logger.info(f'{self._log_prefix} - Update by events completed')
         for status, tasks in new_last_events_for_tasks.items():
             if len(tasks) > 0:
-                logger.info(f'{status}:')
+                logger.debug(f'{status}:')
                 for task in tasks.values():
-                    logger.info(f'   {task.id}: {task.extra_data["content"]}')
+                    logger.debug(f'   {task.id}: {task.extra_data["content"]}')
 
     def load_all_items(self):
         for entity_name in self.managers:

@@ -1,6 +1,8 @@
-from typing import Iterable, List, Dict
 from todoist_api_python.models import Task
+from requests.exceptions import HTTPError
+from typing import Iterable, List, Dict
 from time import sleep
+
 
 from .base_entity_manager import BaseEntityManager, logger
 from src.todoist import ExtendedTask
@@ -23,7 +25,12 @@ class TasksManager(BaseEntityManager):
         return self._to_dict_by_id(self._extend_tasks(self.api.rest_api.get_tasks()))
 
     def _get_item_from_api(self, _id) -> Dict[str, _entity_type]:
-        return self._extend_task(self.api.rest_api.get_task(task_id=_id))
+        try:
+            task = self._extend_task(self.api.rest_api.get_task(task_id=_id))
+        except HTTPError:
+            logger.error(f'Could not get task from api by id {_id}')
+            task = None
+        return task
 
     def _extend_tasks(self, tasks: Iterable[Task]) -> List[_entity_type]:
         return [self._extend_task(task) for task in tasks]

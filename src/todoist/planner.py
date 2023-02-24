@@ -322,6 +322,8 @@ class Plan:
             if task_status not in (None, 'completed_recurring'):
                 count_by_status[task_status] += 1
 
+        count_by_status['completed'] += count_by_status['completed_recurring']
+
         return count_by_status
 
     def report(self):

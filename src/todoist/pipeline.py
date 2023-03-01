@@ -39,6 +39,7 @@ class Pipeline:
                 logger.info(f'{self._log_prefix} - Message sent, response code: {response.status_code}')
             except ConnectionError as e:
                 logger.error(f'{self._log_prefix} - Failed to send a message via bot: {e}')
+            delete_previous = False
 
     @staticmethod
     def _format_report(report, horizon, html=True):

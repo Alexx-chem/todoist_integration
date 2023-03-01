@@ -22,16 +22,15 @@ def threaded(fn):
     return wrapper
 
 
-def custom_exception_handler(func, *args, verbose=True, **kwargs):
+def custom_exception_handler(func, *args, **kwargs):
     try:
-        res = func(*args, **kwargs)
-        return res
+        return func(*args, **kwargs)
     except Exception as e:
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        print(f'{now}. Словили исключение {e}. Стек:')
-        if verbose:
-            print(traceback.format_exc())
-            print('Едем дальше!')
+        logger.error(f'{now}. Словили исключение {e}. Стек:')
+        logger.debug(traceback.format_exc())
+        logger.debug('Едем дальше!')
+        return None
 
 
 def get_today():

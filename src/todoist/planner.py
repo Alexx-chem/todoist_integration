@@ -142,7 +142,7 @@ class Plan:
             # If task is deleted -- it can't be planned (and in fact should not get here again)
             return False
 
-        possible_new_statuses = config.PLANNER_TASK_STATUS_TRANSITIONS.get(curr_task_status, ('planned',))
+        target_statuses = config.PLANNER_TASK_STATUS_TRANSITIONS.get(curr_task_status, ('planned',))
 
         if status in ('added', 'loaded') and task_fits_the_plan:
             assert curr_task_status is None, \
@@ -162,26 +162,29 @@ class Plan:
         if status in ('updated', 'uncompleted', 'completed'):
             # Potential error in recurring task processing!
             # Bypassing 'fits_to_plan' check, checking if task_id is in plan instead
+            reschedule_recurring = False
             if status == 'completed' and not task.is_completed and not curr_task_status == 'completed_recurring' \
                     and task.id in self.tasks and task_is_recurring:
                 self.add_task_to_plan(task.id, 'completed_recurring')
                 logger.info(f'{self._log_prefix} - Recurring task {task.id} '
                             f'from the {self.horizon} plan is completed')
+                reschedule_recurring = True
 
             if task_fits_the_plan:
-                if 'planned' in possible_new_statuses and not (task.is_completed or task.is_deleted):
+                if ('planned' in target_statuses or reschedule_recurring) and not (task.is_completed or
+                                                                                   task.is_deleted):
                     self.add_task_to_plan(task.id, 'planned')
                     logger.info(f'{self._log_prefix} - Task {task.id} is planned to the {self.horizon} plan')
-                elif 'completed' in possible_new_statuses and task.is_completed:
+                elif 'completed' in target_statuses and task.is_completed:
                     self.add_task_to_plan(task.id, 'completed')
                     logger.info(f'{self._log_prefix} - Task {task.id} from the {self.horizon} plan is completed')
-            elif 'postponed' in possible_new_statuses and not (task.is_completed or task_is_recurring):
+            elif 'postponed' in target_statuses and not (task.is_completed or task_is_recurring):
                 self.add_task_to_plan(task.id, 'postponed')
                 logger.info(f'{self._log_prefix} - Task {task.id} is postponed from the {self.horizon} plan')
 
             return True
 
-        if status == 'deleted' and task_fits_the_plan and 'deleted' in possible_new_statuses:
+        if status == 'deleted' and task_fits_the_plan and 'deleted' in target_statuses:
             self.add_task_to_plan(task.id, status)
             logger.info(f'{self._log_prefix} - Task {task.id} from the {self.horizon} plan is {status}')
             return True

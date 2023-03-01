@@ -2,8 +2,11 @@ import time
 import schedule
 from typing import Callable
 
-
 from src import threaded
+from src.logger import get_logger
+import config
+
+logger = get_logger(__name__, 'console', logging_level=config.GLOBAL_LOG_LEVEL)
 
 
 class JobManager:
@@ -28,5 +31,5 @@ class JobManager:
 
     @threaded
     def get_task_state(self):
-        print(self.schedule.jobs)
+        logger.info(self.schedule.jobs)
         self.process_schedule()

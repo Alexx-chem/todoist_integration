@@ -61,7 +61,7 @@ class ExtendedTask(Task):
 
     @property
     def is_goal(self):
-        return config.SPECIAL_LABELS['GOAL_LABEL_NAME'] in self.labels
+        return config.SPECIAL_LABELS['GOAL'] in self.labels
 
     @property
     def is_active(self):

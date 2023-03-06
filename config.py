@@ -1,3 +1,5 @@
+import os
+
 # Common
 GLOBAL_LOG_LEVEL = 'DEBUG'
 
@@ -6,19 +8,19 @@ ALEXX_TODOIST_ID = '***REMOVED***'
 headers = {
     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.141 Safari/537.36',
     'cookie': '***REMOVED***'}
-TODOIST_API_TOKEN = ''***REMOVED***''
+TODOIST_API_TOKEN = os.getenv('TODOIST_API_TOKEN')
 TODOIST_API_VERSION = 'v9'
 
 # TG config
-TG_BOT_TOKEN = ''***REMOVED***''
+TG_BOT_TOKEN = os.getenv('TG_BOT_TOKEN')
 ALEXX_TG_CHAT_ID = '***REMOVED***'
 
 # DB config
-DB_CONFIG = {'dbhost': 'localhost',
-             'dbuser': 'postgres',
-             'dbpass': '***REMOVED***',
-             'dbname': 'todoist',
-             'dbport': 5432,
+DB_CONFIG = {'dbhost': os.getenv('DBHOST'),
+             'dbuser': os.getenv('DBUSER'),
+             'dbpass': os.getenv('DBPASS'),
+             'dbname': os.getenv('DBNAME'),
+             'dbport': os.getenv('DBPORT'),
              'cursor_factory': 'dict_cursor'}
 
 # Todoist workflow config
@@ -30,16 +32,18 @@ TODOIST_DATETIME_FORMAT = '%Y-%m-%dT%H:%M:%S.%fZ'
 
 EVENTS_SYNC_FULL_SYNC_PAGES = 52  # One year. One page represents one week according to API docs
 
-SPECIAL_LABELS = {'GOAL_LABEL_NAME': "Цель",
-                  'SUCCESS_LABEL_NAME': "Успех"}
+SPECIAL_LABELS = {'GOAL': "Цель",
+                  'SUCCESS': "Успех"}
 
 PLAN_HORIZONS = {
     'day': {'due_date': None},
     'week': {'due_date': None},
-    'month': {'label': "Месяц"},
-    'quarter': {'label': "Месяц"},
-    'year': {'label': SPECIAL_LABELS['GOAL_LABEL_NAME'],
-             'priority': 4}
+    'month': {'label': SPECIAL_LABELS['GOAL'],
+              'due_date': None},
+    'quarter': {'label': SPECIAL_LABELS['GOAL'],
+                'due_date': None},
+    'year': {'label': SPECIAL_LABELS['GOAL'],
+             'due_date': None}
 }
 
 ENTITY_NAMES_TO_EVENT_OBJECT_TYPES = {

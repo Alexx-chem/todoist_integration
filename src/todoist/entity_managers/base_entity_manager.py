@@ -142,11 +142,5 @@ class BaseEntityManager:
                                            right=current,
                                            op=f'difference')
 
-    def get_current_item_by_id(self, item_id: str) -> _entity_type:
-        return self._current_items[item_id]
-
-    def get_synced_item_by_id(self, item_id: str) -> _entity_type:
-        return self._synced_items[item_id]
-
     def _items_dict_to_obj(self, item_dict_list: List[Dict]) -> List:
         return [self._entity_type.from_dict(item) for item in item_dict_list]

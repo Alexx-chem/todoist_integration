@@ -26,12 +26,12 @@ if __name__ == '__main__':
 
     pipeline.init_db()
     pipeline.load_all_items()
+    pipeline.process_changes(True)
     pipeline.refresh_plans()
-    pipeline.update_by_events()
 
     while True:
         sleep(config.TODOIST_SYNC_TIMEOUT)
         try:
-            pipeline.update_by_events()
+            pipeline.process_changes()
         except Exception as e:
             print(e)

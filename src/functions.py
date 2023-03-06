@@ -204,3 +204,8 @@ def recurring_task_analyzer():
     pass
 
 
+def cut_string(string):
+    if len(string) > config.TODOIST_TASK_CONTENT_LEN_THRESHOLD:
+        string = string[:config.TODOIST_TASK_CONTENT_LEN_THRESHOLD] + '...'
+
+    return string

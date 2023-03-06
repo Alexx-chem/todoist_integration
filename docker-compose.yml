@@ -1,0 +1,22 @@
+version: '3.8'
+services:
+  postgres:
+    env_file: .env
+    image: postgres:13
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: ${DBPASS}
+    volumes:
+      - postgresql_db:/var/lib/postgresql/data/
+    ports:
+      - "5434:5432"
+
+  consensus:
+    env_file: .env
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: consensus_image
+    restart: always
+volumes:
+    postgresql_db:

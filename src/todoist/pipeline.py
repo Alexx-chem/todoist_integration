@@ -18,6 +18,7 @@ class Pipeline:
 
     def __init__(self, localize_db_timezone: bool = True):
 
+        self.delete_prev_messages = True
         self.managers = get_managers()
         self.planner = Planner()
 
@@ -57,13 +58,20 @@ class Pipeline:
     def get_plan_report(self, horizon):
         return self.planner.plans[horizon].report()
 
-    def update_by_events(self):
+    def process_changes(self, send_warnings_via_bot=False):
+        self.delete_prev_messages = True
 
         events_manager = self.managers['events']
-        task_manager = self.managers['tasks']
+        tasks_manager = self.managers['tasks']
 
-        task_manager.load_items()
-        task_manager.sync_items()
+        tasks_manager.load_items()
+        tasks_manager.sync_items()
+        goals_parsing_res = tasks_manager.parse_goals()
+
+        if send_warnings_via_bot:
+            for warn in goals_parsing_res['warnings']:
+                send_message_via_bot(text=warn, delete_previous=self.delete_prev_messages)
+                self.delete_prev_messages = False
 
         events_manager.load_items()
         events_manager.sync_items()
@@ -77,9 +85,9 @@ class Pipeline:
                 tasks_to_insert = {}
                 for task_id in events:
                     # Task is new or uncompleted, but so old, that it is not present in the DB
-                    if task_id not in task_manager.current:
+                    if task_id not in tasks_manager.current:
                         logger.debug(f"Task {task_id} is not in current tasks")
-                        task = task_manager.get_item_from_api(task_id)
+                        task = tasks_manager.get_item_from_api(task_id)
                         if task is not None:
                             tasks_to_insert[task_id] = task
                         else:
@@ -87,10 +95,11 @@ class Pipeline:
                                            f"and it is too old to be in current tasks. Skipping")
                             continue
                     else:
-                        task = task_manager.synced.get(task_id)
+                        task = tasks_manager.synced.get(task_id)
 
                         if task is None:
                             # If the task is not in synced -- it is completed or deleted
+                            logger.debug(f"Task {task_id} is not in synced tasks, updating from events")
                             task = self.update_current_task_from_events(task_id)
 
                         tasks_to_update[task_id] = task
@@ -99,25 +108,25 @@ class Pipeline:
                     self.planner.process_task(task, status)
 
                 if tasks_to_update:
-                    save_items_to_db(entity=task_manager.entity_name,
-                                     attrs=task_manager.attrs,
+                    save_items_to_db(entity=tasks_manager.entity_name,
+                                     attrs=tasks_manager.attrs,
                                      items=tasks_to_update,
                                      save_mode='update')
 
                 if tasks_to_insert:
-                    save_items_to_db(entity=task_manager.entity_name,
-                                     attrs=task_manager.attrs,
+                    save_items_to_db(entity=tasks_manager.entity_name,
+                                     attrs=tasks_manager.attrs,
                                      items=tasks_to_insert,
                                      save_mode='increment')
 
         self.save_new_events_to_db()
 
-        logger.info(f'{self._log_prefix} - Update by events completed')
-        for status, tasks in new_last_events_for_tasks.items():
-            if len(tasks) > 0:
+        logger.info(f'{self._log_prefix} - Task changes processed')
+        for status, events in new_last_events_for_tasks.items():
+            if len(events) > 0:
                 logger.debug(f'{status}:')
-                for task in tasks.values():
-                    logger.debug(f'   {task.id}: {task.extra_data["content"]}')
+                for event in events.values():
+                    logger.debug(f'   {event.object_id}: {event.extra_data["content"]}')
 
     def load_all_items(self):
         for entity_name in self.managers:
@@ -132,60 +141,6 @@ class Pipeline:
     def sync_all_items(self):
         for manager in self.managers.values():
             manager.sync_items()
-
-    def process_diff(self):
-        """
-        Legacy. Maybe not needed
-        """
-
-        task_to_action_map = []
-
-        current_tasks = self.managers['tasks'].current
-        synced_tasks = self.managers['tasks'].synced
-
-        new_events = self.managers['events'].synced_last_for_item_by_date
-
-        # Completed tasks
-        completed_task_ids = current_tasks.keys() & new_events['completed'].keys()
-        logger.debug(f'{self._log_prefix} - completed_task_ids {completed_task_ids}')
-        task_to_action_map.extend([(task_id, 'completed') for task_id in completed_task_ids])
-
-        # Deleted tasks
-        deleted_task_ids = (current_tasks.keys() - synced_tasks.keys()) & new_events['deleted'].keys()
-        logger.debug(f'{self._log_prefix} - deleted_task_ids {deleted_task_ids}')
-        task_to_action_map.extend([(task_id, 'deleted') for task_id in deleted_task_ids])
-
-        # Tasks present only in synced scope, not in local
-        new_and_uncompleted_task_ids = synced_tasks.keys() - current_tasks.keys()
-
-        # Newly created tasks
-        new_task_ids = new_and_uncompleted_task_ids & new_events['added'].keys()
-        logger.debug(f'{self._log_prefix} - new_task_ids {new_task_ids}')
-        task_to_action_map.extend([(task_id, 'created') for task_id in new_task_ids])
-
-        # Uncompleted tasks
-        uncompleted_task_ids = new_and_uncompleted_task_ids & new_events['uncompleted'].keys()
-        logger.debug(f'{self._log_prefix} - uncompleted_task_ids {uncompleted_task_ids}')
-        task_to_action_map.extend([(task_id, 'uncompleted') for task_id in uncompleted_task_ids])
-
-        # Tasks, present in both synced and local scopes
-        common_task_ids = synced_tasks.keys() & current_tasks.keys()  # Tasks present both in local and synced scopes
-
-        # Tasks, modified in comparison
-        modified_tasks = self._get_tasks_diff(common_task_ids)
-        logger.debug(f'{self._log_prefix} - modified_tasks: {modified_tasks}')
-
-        task_to_action_map.extend([(task_id, 'modified') for task_id in modified_tasks])
-
-        for task_id, action in task_to_action_map:
-
-            if action in ("completed", "deleted"):
-                task = current_tasks[task_id]
-            else:
-                task = synced_tasks[task_id]
-
-            task_planned = self.planner.process_task(task, action)
-            logger.debug(f'{self._log_prefix} - Task {"is" if task_planned else "is not"} planned')
 
     def _get_tasks_diff(self, common_task_ids):
 

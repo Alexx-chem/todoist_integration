@@ -4,7 +4,7 @@ import inspect
 
 from db_worker import DBWorker
 
-from src.functions import get_today, horizon_to_date
+from src.functions import get_today, horizon_to_date, cut_string
 from src.todoist.entity_classes.extended_task import ExtendedTask
 import config
 from src.logger import get_logger
@@ -119,12 +119,9 @@ class Plan:
 
     def process_task(self, task: ExtendedTask, status: str) -> bool:
 
-        content_len = len(task.content)
-        content_cut = task.content
-        if content_len > config.TODOIST_TASK_CONTENT_LEN_THRESHOLD:
-            content_cut = content_cut[:config.TODOIST_TASK_CONTENT_LEN_THRESHOLD] + '...'
+        short_content = cut_string(task.content)
 
-        logger.debug(f'{self._log_prefix} - Processing task {task.id}: {content_cut} '
+        logger.debug(f'{self._log_prefix} - Processing task {task.id}: {short_content} '
                      f'for the {self.horizon} plan')
 
         task_fits_the_plan = self._task_fits_the_plan(task)

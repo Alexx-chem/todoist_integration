@@ -3,5 +3,6 @@
 /.ipynb_checkpoints/
 /tg_channel_integration_testing.ipynb
 /.idea
+/.env
 /Timeline Test.ipynb
 /parsed_projects

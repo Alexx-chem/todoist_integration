@@ -1,10 +1,10 @@
-from datetime import datetime, date
+from datetime import date
 from collections import defaultdict
 import inspect
 
 from db_worker import DBWorker
 
-from src.functions import get_today, horizon_to_date, cut_string
+from src.functions import get_today, horizon_to_date, cut_string, convert_dt
 from src.todoist.entity_classes.extended_task import ExtendedTask
 import config
 from src.logger import get_logger
@@ -26,30 +26,33 @@ class Planner:
 
         for horizon in config.PLAN_HORIZONS.keys():
 
-            try:
-                plan = Plan.get_active_by_horizon(horizon=horizon)
+            if horizon not in self.plans:
+                try:
+                    plan = Plan.get_active_by_horizon(horizon=horizon)
+                    logger.info(f'{self._log_prefix} - Plan for the {horizon} was loaded from the DB')
+                except ValueError as e:
+                    logger.warning(f'{self._log_prefix} - A error occurred while loading a plan from the DB: "{e}"')
+                    logger.info(f'{self._log_prefix} - Creating a new plan')
 
-                if plan.end < today:
-                    logger.info(f'{self._log_prefix} - Plan for the {horizon} is outdated! '
-                                f'Creating a report and a new plan')
-                    
-                    reports[horizon] = plan.report()
-
-                    plan.set_inactive_by_id()
-
+                    Plan.set_inactive_by_horizon(horizon)
                     plan = self._create_plan_from_scratch(horizon, today, tasks)
 
-                else:
-                    logger.info(f'{self._log_prefix} - Plan for the {horizon} loaded from the DB')
+                self.plans[horizon] = plan
 
-            except ValueError as e:
-                logger.warning(f'{self._log_prefix} - A error occurred while loading a plan from the DB: "{e}"')
-                logger.info(f'{self._log_prefix} - Creating a new plan')
+            plan = self.plans[horizon]
 
-                Plan.set_inactive_by_horizon(horizon)
-                plan = self._create_plan_from_scratch(horizon, today, tasks)
+            if plan.end < today:
+                logger.info(f'{self._log_prefix} - Plan for the {horizon} is outdated! '
+                            f'Creating a report and a new plan')
 
-            self.plans[horizon] = plan
+                reports[horizon] = plan.report()
+
+                plan.set_inactive_by_id()
+
+                self.plans[horizon] = self._create_plan_from_scratch(horizon, today, tasks)
+
+            else:
+                self.plans[horizon].load_tasks_from_db()
 
         return reports
 
@@ -105,13 +108,17 @@ class Plan:
         :param end:     Plan end date
         """
 
+        self.__check_init_params(horizon, active, start, end)
+
         self.id = id_
         self.horizon = horizon
         self.active = active
         self.start = start
         self.end = end
 
-        self.tasks = self.get_tasks_from_db()
+        self.tasks = None
+        self.load_tasks_from_db()
+
         self.stats = self.get_tasks_stats()
 
         self.task_attrs = config.PLAN_HORIZONS[self.horizon]
@@ -121,7 +128,7 @@ class Plan:
 
         short_content = cut_string(task.content)
 
-        logger.debug(f'{self._log_prefix} - Processing task {task.id}: {short_content} '
+        logger.debug(f'{self._log_prefix} - Processing "{status}" task {task.id}: {short_content} '
                      f'for the {self.horizon} plan')
 
         task_fits_the_plan = self._task_fits_the_plan(task)
@@ -251,11 +258,11 @@ class Plan:
         end = plan_db[0]['end_date']
 
         plan = Plan(plan_id, horizon, active, start.date(), end.date())
-        plan.get_tasks_from_db()
+        plan.load_tasks_from_db()
 
         return plan
 
-    def get_tasks_from_db(self):
+    def load_tasks_from_db(self):
 
         tasks_dict = defaultdict(list)
 
@@ -269,7 +276,7 @@ class Plan:
             timestamp = task_row['timestamp']
             tasks_dict[task_id].append((status, timestamp))
 
-        return tasks_dict
+        self.tasks = tasks_dict
 
     def get_tasks_stats(self):
 
@@ -287,7 +294,8 @@ class Plan:
         if task.due is None:
             return False
 
-        due_date = datetime.strptime(task.due.date, config.TODOIST_DATE_FORMAT).date()
+        due_date = convert_dt(task.due.date, 'date')
+
         return due_date <= self.end
 
     def add_task_to_plan(self, task_id, status):
@@ -340,12 +348,20 @@ class Plan:
         except ZeroDivisionError:
             completion_ratio = 0
 
-        report = {'completed': f"Completed:\n{qty_completed} ",
-                  'not_completed': f"Not completed:\n{qty_planned} ",
-                  'postponed': f"Postponed:\n{qty_postponed} ",
-                  'deleted': f"Deleted:\n{qty_deleted}",
-                  'overall_planned': f"Overall planned:\n{qty_overall_planned} ",
-                  'compl_ratio': f"Completion ratio:\n{'{:.2f}'.format(completion_ratio)}%"}
+        report = {
+            'completed': {'title': "Completed",
+                          'number': qty_completed},
+            'not_completed': {'title': "Not completed",
+                              'number': qty_planned},
+            'postponed': {'title': "Postponed",
+                          'number': qty_postponed},
+            'deleted': {'title': "Deleted",
+                        'number': qty_deleted},
+            'overall_planned': {'title': "Overall planned",
+                                'number': qty_overall_planned},
+            'compl_ratio': {'title': "Completion ratio",
+                            'number': f"{'{:.2f}'.format(completion_ratio)}%"}
+        }
 
         return report
 
@@ -355,3 +371,10 @@ class Plan:
     @classmethod
     def set_inactive_by_horizon(cls, horizon):
         DBWorker.input(f"update plans set active = false where horizon = '{horizon}'")
+
+    @staticmethod
+    def __check_init_params(horizon: str, active: bool, start: date, end: date):
+        assert horizon in horizon_to_date.keys(), f'Unknown plan horizon: {horizon}'
+        assert isinstance(active, bool), f'Wrong plan status: {active}'
+        assert isinstance(start, date), f'Wrong plan start type: {start}, {type(start)}'
+        assert isinstance(end, date), f'Wrong plan start type: {end}, {type(end)}'

@@ -63,7 +63,7 @@ def get_end_of_the_quarter():
 
 def get_end_of_the_year():
 
-    return datetime(day=31, month=12, year=get_today().year)
+    return date(day=31, month=12, year=get_today().year)
 
 
 horizon_to_date = {
@@ -95,17 +95,27 @@ def unpack_chained_attr(obj, attr_chain):
 
 def convert_dt(dt: Union[datetime, date, str], str_type='datetime'):
     if isinstance(dt, datetime):
-        return dt.strftime(config.TODOIST_DATETIME_FORMAT)
+        for dt_format in config.TODOIST_DATETIME_FORMATS:
+            try:
+                return dt.strftime(dt_format)
+            except ValueError:
+                pass
+        raise ValueError(f'None of the configured formats helped for dt: {dt}')
 
     if isinstance(dt, date):
         return dt.strftime(config.TODOIST_DATE_FORMAT)
 
     if isinstance(dt, str):
         if str_type == 'datetime':
-            return datetime.strptime(dt, config.TODOIST_DATETIME_FORMAT)
+            for dt_format in config.TODOIST_DATETIME_FORMATS:
+                try:
+                    return datetime.strptime(dt, dt_format)
+                except ValueError:
+                    pass
+            raise ValueError(f'None of the configured formats helped for dt: {dt}')
 
         if str_type == 'date':
-            return datetime.strptime(dt, config.TODOIST_DATE_FORMAT)
+            return datetime.strptime(dt, config.TODOIST_DATE_FORMAT).date()
 
 
 def get_items_set_operation(left: Dict, right: Dict, op: str) -> Dict:

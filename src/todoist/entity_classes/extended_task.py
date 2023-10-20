@@ -2,6 +2,7 @@ from todoist_api_python.models import Task, Due
 from typing import Union, Dict
 from datetime import datetime, date
 
+from src.functions import convert_dt
 import config
 
 
@@ -105,7 +106,7 @@ class ExtendedTask(Task):
             if due_dict['date'] is not None and isinstance(due_dict['date'], date):
                 due_dict['date'] = due_dict['date'].strftime(config.TODOIST_DATE_FORMAT)
             if due_dict['datetime'] is not None and isinstance(due_dict['datetime'], datetime):
-                due_dict['datetime'] = due_dict['datetime'].strftime(config.TODOIST_DATETIME_FORMAT)
+                due_dict['datetime'] = convert_dt(due_dict['datetime'])
             due = due_dict
 
         return cls(

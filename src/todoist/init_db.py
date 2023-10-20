@@ -1,3 +1,5 @@
+from typing import Dict
+
 from src.functions import save_items_to_db
 from .entity_managers import ENTITY_CONFIG
 from db_worker import DBWorker
@@ -57,7 +59,7 @@ def init_system_params():
                    "                                       ('initial_tables_fill_complete')")
 
 
-def fill_item_tables_from_scratch(managers, check=True):
+def fill_item_tables_from_scratch(managers: Dict, check=True):
     logger.debug('Filling tables')
     if check:
         tables_filled = DBWorker.select("SELECT value FROM system_params WHERE param = 'initial_tables_fill_complete'",
@@ -67,10 +69,11 @@ def fill_item_tables_from_scratch(managers, check=True):
             return True
 
     for entity in ENTITY_CONFIG:
+        manager_name = entity + "_manager"
         attrs = ENTITY_CONFIG[entity]["attrs"]
 
-        managers[entity].sync_items()
-        items = managers[entity].synced
+        managers[manager_name].sync_items()
+        items = managers[manager_name].synced
 
         save_items_to_db(entity, attrs, items, save_mode='delete_all')
 

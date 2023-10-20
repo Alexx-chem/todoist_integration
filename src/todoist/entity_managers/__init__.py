@@ -1,4 +1,4 @@
-from todoist_api_python.models import Task, Project, Section, Label
+from todoist_api_python.models import Project, Section, Label
 
 from src.todoist.entity_classes.todoist_event import Event
 from src.todoist import ExtendedTask
@@ -155,7 +155,7 @@ from .labels_manager import LabelsManager
 from .events_manager import EventsManager
 
 
-def get_managers():
+def get_new_entity_managers():
     return {entity: _get_manager_by_entity_name(entity) for entity in ENTITY_CONFIG}
 
 
@@ -164,15 +164,15 @@ def _get_manager_by_entity_name(entity_name):
     assert entity_name in ENTITY_CONFIG.keys(), f'Unknown entity name: {entity_name}'
 
     if entity_name == 'tasks':
-        return TasksManager()
+        return TasksManager
     if entity_name == 'projects':
-        return ProjectsManager()
+        return ProjectsManager
     if entity_name == 'sections':
-        return SectionsManager()
+        return SectionsManager
     if entity_name == 'labels':
-        return LabelsManager()
+        return LabelsManager
     if entity_name == 'events':
-        return EventsManager()
+        return EventsManager
 
 
 

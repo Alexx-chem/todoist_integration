@@ -28,7 +28,11 @@ DB_CONFIG = {'dbhost': os.getenv('DBHOST'),
 TODOIST_SYNC_TIMEOUT = 600  # seconds
 
 TODOIST_DATE_FORMAT = '%Y-%m-%d'
-TODOIST_DATETIME_FORMAT = '%Y-%m-%dT%H:%M:%S.%fZ'
+TODOIST_DATETIME_FORMATS = (
+    '%Y-%m-%dT%H:%M:%S',
+    '%Y-%m-%dT%H:%M:%SZ',
+    '%Y-%m-%dT%H:%M:%S.%fZ'
+)
 
 EVENTS_SYNC_FULL_SYNC_PAGES = 52  # One year. One page represents one week according to API docs
 

@@ -25,13 +25,12 @@ if __name__ == '__main__':
     job_manager.get_task_state()
 
     pipeline.init_db()
-    pipeline.load_all_items()
-    pipeline.process_changes(True)
     pipeline.refresh_plans()
+    pipeline.handle_changes(True)
 
     while True:
         sleep(config.TODOIST_SYNC_TIMEOUT)
         try:
-            pipeline.process_changes()
+            pipeline.handle_changes()
         except Exception as e:
             print(e)

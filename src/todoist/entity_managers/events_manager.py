@@ -8,6 +8,7 @@ from db_worker import DBWorker
 
 from .base_entity_manager import BaseEntityManager, logger
 from src.todoist.entity_classes import Event
+from src.functions import convert_dt
 from . import ENTITY_CONFIG
 import config
 
@@ -48,8 +49,7 @@ class EventsManager(BaseEntityManager):
                                  f'from activity page object: {activity_page}')
 
                 max_offset_steps = activity_page['count'] // request_limit
-                oldest_offset_event_dt = datetime.strptime(events_list_full[-1]['event_date'],
-                                                           config.TODOIST_DATETIME_FORMAT)
+                oldest_offset_event_dt = convert_dt(events_list_full[-1]['event_date'])
                 if max_offset_steps == offset_step or oldest_offset_event_dt <= last_known_event_dt:
                     break
 

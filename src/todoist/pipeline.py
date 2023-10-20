@@ -1,13 +1,13 @@
-from datetime import datetime
-
 from requests.exceptions import ConnectionError
 from todoist_api_python.models import Due
+from typing import Dict, List
 
-from src.functions import set_db_timezone, send_message_via_bot, save_items_to_db
-from src.todoist.entity_managers import get_managers
+from src.functions import set_db_timezone, send_message_via_bot, save_items_to_db, convert_dt
+from src.todoist.entity_managers import get_new_entity_managers
+from src.todoist import init_db, GTDHandler
 from src.todoist.planner import Planner
 from src.logger import get_logger
-from src.todoist import init_db
+
 
 import config
 
@@ -19,24 +19,42 @@ class Pipeline:
     def __init__(self, localize_db_timezone: bool = True):
 
         self.delete_prev_messages = True
-        self.managers = get_managers()
         self.planner = Planner()
+
+        self.tasks_manager = None
+        self.projects_manager = None
+        self.sections_manager = None
+        self.labels_manager = None
+        self.events_manager = None
+
+        self._set_managers()
+
+        self.gtd_handler = GTDHandler(self.tasks_manager,
+                                      self.projects_manager)
 
         self._log_prefix = self.__class__.__name__
 
         if localize_db_timezone:
             set_db_timezone()
 
-    def refresh_plans(self):
+    def _set_managers(self):
+        managers = get_new_entity_managers()
+        self.__managers_names = []
+        for entity_name in managers:
+            manager_name = f'{entity_name}_manager'
+            self.__managers_names.append(manager_name)
+            self.__dict__[manager_name] = managers[entity_name]()
 
-        reports = self.planner.refresh_plans(self.managers['tasks'].current)
+    def refresh_plans(self):
+        self.tasks_manager.load_items()
+        reports = self.planner.refresh_plans(self.tasks_manager.current)
         delete_previous = True
         for horizon in reports:
             report_text = self._format_report(reports[horizon], horizon)
             logger.info(f'{self._log_prefix} - {report_text}')
             logger.info(f'{self._log_prefix} -Sending message via bot')
             try:
-                response = send_message_via_bot(report_text, delete_previous=delete_previous)
+                response = send_message_via_bot(report_text, delete_previous=delete_previous, save_msg_to_db=False)
                 logger.info(f'{self._log_prefix} - Message sent, response code: {response.status_code}')
             except ConnectionError as e:
                 logger.error(f'{self._log_prefix} - Failed to send a message via bot: {e}')
@@ -44,39 +62,47 @@ class Pipeline:
 
     @staticmethod
     def _format_report(report, horizon, html=True):
-        report_text = f"{horizon.capitalize()} plan report:\n\n\n"
+        report_text = f"{horizon.capitalize()} plan report"
         if html:
             report_text = "<b>" + report_text + "</b>"
 
+        report_text += '\n\n\n'
+
         for section in report:
+            report_text += report[section]['title'] + '\n'
             if html:
                 report_text += config.PLANNER_REPORT_SECTIONS_MARKS[section] + ' '
-            report_text += report[section] + '\n\n'
+            report_text += str(report[section]['number']) + '\n\n'
 
         return report_text
 
     def get_plan_report(self, horizon):
         return self.planner.plans[horizon].report()
 
-    def process_changes(self, send_warnings_via_bot=False):
+    def handle_changes(self, send_warnings_via_bot=False):
         self.delete_prev_messages = True
 
-        events_manager = self.managers['events']
-        tasks_manager = self.managers['tasks']
+        self.tasks_manager.load_items()
+        self.events_manager.load_items()
 
-        tasks_manager.load_items()
-        tasks_manager.sync_items()
-        goals_parsing_res = tasks_manager.parse_goals()
+        self.tasks_manager.sync_items()
+        self.events_manager.sync_items()
+        self.projects_manager.sync_items()
 
-        if send_warnings_via_bot:
-            for warn in goals_parsing_res['warnings']:
-                send_message_via_bot(text=warn, delete_previous=self.delete_prev_messages)
-                self.delete_prev_messages = False
+        parsing_res = self.gtd_handler.handle_projects()
 
-        events_manager.load_items()
-        events_manager.sync_items()
+        if send_warnings_via_bot and parsing_res:
+            for project_parsing_res in parsing_res.values():
+                if project_parsing_res['warnings']:
+                    self._send_parsing_warnings_via_bot(project_parsing_res['warnings'],
+                                                        scope='project')
 
-        new_last_events_for_tasks = events_manager.new_last_event_for_task_by_date
+                goals_warnings = project_parsing_res['goals'].get('warnings')
+                if goals_warnings:
+                    self._send_parsing_warnings_via_bot(goals_warnings,
+                                                        scope='goals')
+
+        new_last_events_for_tasks = self.events_manager.new_last_event_for_task_by_date
 
         for status in new_last_events_for_tasks:
             events = new_last_events_for_tasks[status]
@@ -85,9 +111,9 @@ class Pipeline:
                 tasks_to_insert = {}
                 for task_id in events:
                     # Task is new or uncompleted, but so old, that it is not present in the DB
-                    if task_id not in tasks_manager.current:
+                    if task_id not in self.tasks_manager.current:
                         logger.debug(f"Task {task_id} is not in current tasks")
-                        task = tasks_manager.get_item_from_api(task_id)
+                        task = self.tasks_manager.get_item_from_api(task_id)
                         if task is not None:
                             tasks_to_insert[task_id] = task
                         else:
@@ -95,7 +121,7 @@ class Pipeline:
                                            f"and it is too old to be in current tasks. Skipping")
                             continue
                     else:
-                        task = tasks_manager.synced.get(task_id)
+                        task = self.tasks_manager.synced.get(task_id)
 
                         if task is None:
                             # If the task is not in synced -- it is completed or deleted
@@ -108,14 +134,14 @@ class Pipeline:
                     self.planner.process_task(task, status)
 
                 if tasks_to_update:
-                    save_items_to_db(entity=tasks_manager.entity_name,
-                                     attrs=tasks_manager.attrs,
+                    save_items_to_db(entity=self.tasks_manager.entity_name,
+                                     attrs=self.tasks_manager.attrs,
                                      items=tasks_to_update,
                                      save_mode='update')
 
                 if tasks_to_insert:
-                    save_items_to_db(entity=tasks_manager.entity_name,
-                                     attrs=tasks_manager.attrs,
+                    save_items_to_db(entity=self.tasks_manager.entity_name,
+                                     attrs=self.tasks_manager.attrs,
                                      items=tasks_to_insert,
                                      save_mode='increment')
 
@@ -129,17 +155,18 @@ class Pipeline:
                     logger.debug(f'   {event.object_id}: {event.extra_data["content"]}')
 
     def load_all_items(self):
-        for entity_name in self.managers:
-            self.load_entity_items(entity_name)
+        for manager_name in self.__managers_names:
+            self.load_entity_items(manager_name)
 
-    def load_entity_items(self, entity_name: str):
+    def load_entity_items(self, manager_name: str):
         try:
-            self.managers[entity_name].load_items()
+            self.__dict__[manager_name].load_items()
         except Exception as e:
             logger.error(f'{self._log_prefix} - DB error. {e}')
 
     def sync_all_items(self):
-        for manager in self.managers.values():
+        for manager_name in self.__managers_names:
+            manager = self.__dict__[manager_name]
             manager.sync_items()
 
     def _get_tasks_diff(self, common_task_ids):
@@ -147,13 +174,13 @@ class Pipeline:
         res = set()
 
         for task_id in common_task_ids:
-            if self.managers['tasks'].get_task_diff_by_id(task_id):
+            if self.tasks_manager.get_task_diff_by_id(task_id):
                 res.add(task_id)
 
         return res
 
     def save_new_events_to_db(self):
-        events_manager = self.managers['events']
+        events_manager = self.events_manager
         if events_manager.new:
             save_items_to_db(entity=events_manager.entity_name,
                              attrs=events_manager.attrs,
@@ -161,11 +188,11 @@ class Pipeline:
                              save_mode='increment')
 
     def update_current_task_from_events(self, task_id):
-        self.managers['events'].sync_items()
-        task_events = self.managers['events'].synced_by_object_id(task_id)
+        self.events_manager.sync_items()
+        task_events = self.events_manager.synced_by_object_id(task_id)
         task_events.sort(key=lambda x: x.event_date)
 
-        task = self.managers['tasks'].current[task_id]
+        task = self.tasks_manager.current[task_id]
         for event in task_events:
             if event.event_type == 'deleted':
                 task.is_deleted = True
@@ -185,7 +212,7 @@ class Pipeline:
                             if event_datetime_str is None:
                                 due = None
                             else:
-                                event_datetime = datetime.strptime(event_datetime_str, config.TODOIST_DATETIME_FORMAT)
+                                event_datetime = convert_dt(event_datetime_str)
                                 event_date_str = event_datetime.date().strftime(config.TODOIST_DATE_FORMAT)
                                 due = Due(date=event_date_str,
                                           string='',
@@ -204,5 +231,15 @@ class Pipeline:
     def create_tables_if_not_exist(self):
         pass
 
+    @property
+    def _get_managers(self) -> Dict:
+        return {manager_name: self.__dict__[manager_name] for manager_name in self.__managers_names}
+
     def fill_tables_if_empty(self):
-        init_db.fill_item_tables_from_scratch(managers=self.managers, check=True)
+        init_db.fill_item_tables_from_scratch(managers=self._get_managers, check=True)
+
+    def _send_parsing_warnings_via_bot(self, warnings: List, scope: str):
+        warns_text = '\n'.join(warnings)
+        send_message_via_bot(text=f"Bad planned {scope}\n\n{warns_text}",
+                             delete_previous=self.delete_prev_messages)
+        self.delete_prev_messages = False
